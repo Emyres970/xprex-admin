@@ -63,7 +63,7 @@ final _router = GoRouter(
 
     // 2. THE GATEKEEPER: Check if it's YOU
     final email = session.user.email;
-    const adminEmail = 'YOUR_EMAIL@gmail.com'; // <--- PUT YOUR EMAIL HERE
+    const adminEmail = 'rudeboyemyres@gmail.com'; // <--- PUT YOUR EMAIL HERE
 
     if (email != adminEmail) {
       Supabase.instance.client.auth.signOut();
