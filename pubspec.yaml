@@ -1,0 +1,26 @@
+name: xprex_admin
+description: The War Room for XpreX
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The Core Engine
+  supabase_flutter: ^2.0.0
+  # Navigation
+  go_router: ^13.0.0
+  # UI Kits (Optional but good for dashboards)
+  google_fonts: ^6.1.0
+  flutter_riverpod: ^2.4.9 # For state management
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
