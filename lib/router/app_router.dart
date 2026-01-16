@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // Import your screens
 import '../auth/login_screen.dart';
 import '../dashboard/roster_screen.dart';
+import '../dashboard/verification_screen.dart'; // <--- NEW IMPORT
 
 // -----------------------------------------------------------------------------
 // THE LISTENER CLASS (The Fix for the "Refresh Bug")
@@ -34,7 +35,7 @@ class GoRouterRefreshStream extends ChangeNotifier {
 // -----------------------------------------------------------------------------
 final appRouter = GoRouter(
   initialLocation: '/',
-  // THIS LINE FIXES THE BUG: It forces a re-check whenever Auth state changes
+  // Forces a re-check whenever Auth state changes
   refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
   
   routes: [
@@ -45,6 +46,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/dashboard',
       builder: (context, state) => const DashboardPage(),
+    ),
+    // NEW ROUTE: The Verification Queue
+    GoRoute(
+      path: '/verification',
+      builder: (context, state) => const VerificationScreen(),
     ),
   ],
   
@@ -59,11 +65,9 @@ final appRouter = GoRouter(
 
     // 2. THE GATEKEEPER (Security Check)
     final email = session.user.email;
-    // REPLACE WITH YOUR EXACT EMAIL
-    const adminEmail = 'rudeboyemyres@gmail.com'; 
+    const adminEmail = 'rudeboyemyres@gmail.com'; // YOUR EMAIL
 
     if (email != adminEmail) {
-      // If they are logged in but not YOU, kick them out
       Supabase.instance.client.auth.signOut();
       return '/';
     }
@@ -73,7 +77,7 @@ final appRouter = GoRouter(
       return '/dashboard';
     }
 
-    // 4. No action needed (let them go where they want)
+    // 4. No action needed
     return null; 
   },
 );
