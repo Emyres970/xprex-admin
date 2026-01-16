@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:go_router/go_router.dart';
 
-// Import our new modules (Adjust imports if your folder structure is different)
+// Import your new Theme and Router
 import 'theme.dart';
-import 'auth/login_screen.dart';
-import 'dashboard/roster_screen.dart';
+import 'router/app_router.dart';
 
 // CONFIGURATION
 const supabaseUrl = 'https://svyuxdowffweanjjzvis.supabase.co';
@@ -13,7 +11,12 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+  );
+
   runApp(const XprexAdminApp());
 }
 
@@ -25,31 +28,8 @@ class XprexAdminApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'XpreX War Room',
       debugShowCheckedModeBanner: false,
-      theme: appTheme, // Using our new separate theme file
-      routerConfig: _router,
+      theme: appTheme, // Still using your custom theme
+      routerConfig: appRouter, // Now using the modular router
     );
   }
 }
-
-final _router = GoRouter(
-  initialLocation: '/',
-  routes: [
-    GoRoute(path: '/', builder: (context, state) => const LoginPage()),
-    GoRoute(path: '/dashboard', builder: (context, state) => const DashboardPage()),
-  ],
-  redirect: (context, state) {
-    final session = Supabase.instance.client.auth.currentSession;
-    final onLoginPage = state.uri.toString() == '/';
-
-    if (session == null) return '/';
-
-    final email = session.user.email;
-    if (email != 'rudeboyemyres@gmail.com') { // REPLACE WITH YOUR EMAIL
-      Supabase.instance.client.auth.signOut();
-      return '/';
-    }
-
-    if (onLoginPage) return '/dashboard';
-    return null; 
-  },
-);
