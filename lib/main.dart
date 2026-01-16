@@ -5,8 +5,8 @@ import 'package:go_router/go_router.dart';
 // -----------------------------------------------------------------------------
 // 1. CONFIGURATION (Replace with your actual keys from the mobile app)
 // -----------------------------------------------------------------------------
-const supabaseUrl = 'YOUR_SUPABASE_URL_HERE';
-const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY_HERE';
+const supabaseUrl = 'https://svyuxdowffweanjjzvis.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2eXV4ZG93ZmZ3ZWFuamp6dmlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODI2NzYsImV4cCI6MjA3ODk1ODY3Nn0.YZqPUaeJKp7kdc_FPBoPfoIruDpTka3ptCmanGpMjR0';
 
 // -----------------------------------------------------------------------------
 // 2. MAIN ENTRY POINT
