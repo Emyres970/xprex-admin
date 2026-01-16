@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// Import your new Theme and Router
+// IMPORTS
 import 'theme.dart';
-import 'router/app_router.dart';
+import 'router/app_router.dart'; 
 
 // CONFIGURATION
 const supabaseUrl = 'https://svyuxdowffweanjjzvis.supabase.co';
@@ -11,12 +11,7 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabaseAnonKey,
-  );
-
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
   runApp(const XprexAdminApp());
 }
 
@@ -28,8 +23,8 @@ class XprexAdminApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'XpreX War Room',
       debugShowCheckedModeBanner: false,
-      theme: appTheme, // Still using your custom theme
-      routerConfig: appRouter, // Now using the modular router
+      theme: appTheme, 
+      routerConfig: appRouter, 
     );
   }
 }
