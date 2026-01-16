@@ -3,9 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 // -----------------------------------------------------------------------------
-// 1. CONFIGURATION (Keep your keys from the previous step!)
+// 1. CONFIGURATION
 // -----------------------------------------------------------------------------
-// RE-PASTE YOUR KEYS HERE
 const supabaseUrl = 'https://svyuxdowffweanjjzvis.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2eXV4ZG93ZmZ3ZWFuamp6dmlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODI2NzYsImV4cCI6MjA3ODk1ODY3Nn0.YZqPUaeJKp7kdc_FPBoPfoIruDpTka3ptCmanGpMjR0';
 
@@ -34,10 +33,24 @@ class XprexAdminApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         primaryColor: Colors.amber,
         scaffoldBackgroundColor: const Color(0xFF121212),
+        // FIX: This theme prevents the "Strikethrough" glitch
         inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           filled: true,
-          fillColor: Colors.white10,
+          fillColor: const Color(0xFF2C2C2C), // Dark Grey background
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none, // No border line to cut through text
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.white24),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.amber, width: 2),
+          ),
+          labelStyle: const TextStyle(color: Colors.white70),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         ),
       ),
       routerConfig: _router,
@@ -58,27 +71,24 @@ final _router = GoRouter(
     final session = Supabase.instance.client.auth.currentSession;
     final onLoginPage = state.uri.toString() == '/';
 
-    // 1. If no session, stay on Login
     if (session == null) return '/';
 
-    // 2. THE GATEKEEPER: Check if it's YOU
+    // THE GATEKEEPER logic
     final email = session.user.email;
-    const adminEmail = 'rudeboyemyres@gmail.com'; // <--- PUT YOUR EMAIL HERE
+    const adminEmail = 'rudeboyemyres@gmail.com'; 
 
     if (email != adminEmail) {
       Supabase.instance.client.auth.signOut();
       return '/';
     }
 
-    // 3. If authorized and on Login, go to Dashboard
     if (onLoginPage) return '/dashboard';
-
     return null; 
   },
 );
 
 // -----------------------------------------------------------------------------
-// 4. LOGIN PAGE (Now Functional!)
+// 4. LOGIN PAGE
 // -----------------------------------------------------------------------------
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -95,14 +105,23 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _login() async {
     setState(() => _isLoading = true);
     try {
-      await Supabase.instance.client.auth.signInWithPassword(
+      final response = await Supabase.instance.client.auth.signInWithPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      // Router handles redirection automatically
+      
+      final email = response.user?.email;
+      if (email != 'rudeboyemyres@gmail.com') {
+        throw "Access Denied. You are not the Architect.";
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Login Failed", style: TextStyle(color: Colors.red)),
+          content: Text(e.toString().replaceAll("AuthException:", "").trim()),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -119,28 +138,36 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text("XpreX War Room", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 32),
+              const Icon(Icons.shield, size: 64, color: Colors.amber),
+              const SizedBox(height: 24),
+              const Text("WAR ROOM ACCESS", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              const SizedBox(height: 48),
               TextField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Admin Email'),
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(labelText: 'Commander Email'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               TextField(
                 controller: _passwordController,
                 obscureText: true,
+                style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(labelText: 'Password'),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 56,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber, 
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                   onPressed: _isLoading ? null : _login,
                   child: _isLoading 
                       ? const CircularProgressIndicator(color: Colors.black) 
-                      : const Text("Enter War Room"),
+                      : const Text("INITIALIZE LINK", style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -152,26 +179,32 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 // -----------------------------------------------------------------------------
-// 5. DASHBOARD PAGE (The God View)
+// 5. DASHBOARD PAGE (The Roster)
 // -----------------------------------------------------------------------------
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // We assume your table is named 'profiles' or 'users' in public schema
-    // Adjust this query if your table name is different!
     final usersStream = Supabase.instance.client
-        .from('profiles') // <--- CHECK YOUR TABLE NAME IN SUPABASE
+        .from('profiles')
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: false);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("The Roster"),
+        title: const Text("THE ROSTER"),
+        centerTitle: false,
+        backgroundColor: Colors.black,
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              // Just triggers a UI rebuild effectively in stream builder
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.redAccent),
             onPressed: () => Supabase.instance.client.auth.signOut(),
           ),
         ],
@@ -180,29 +213,63 @@ class DashboardPage extends StatelessWidget {
         stream: usersStream,
         builder: (context, snapshot) {
           if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.amber));
 
           final users = snapshot.data!;
 
-          if (users.isEmpty) return const Center(child: Text("No users found yet."));
+          if (users.isEmpty) return const Center(child: Text("No soldiers found yet."));
 
-          return ListView.builder(
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
             itemCount: users.length,
+            separatorBuilder: (c, i) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final user = users[index];
-              // Adjust these keys based on your actual database columns
-              final name = user['full_name'] ?? user['username'] ?? 'Unknown';
+              final name = user['full_name'] ?? user['username'] ?? 'Unknown Agent';
               final email = user['email'] ?? 'No Email';
+              final joinedAt = user['created_at'] != null 
+                  ? user['created_at'].toString().substring(0, 10) 
+                  : 'Unknown';
               
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              return Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white10),
+                ),
                 child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
-                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(email),
-                  trailing: const Chip(
-                    label: Text("User"), 
-                    backgroundColor: Colors.grey,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.amber.withOpacity(0.2),
+                    child: Text(name[0].toUpperCase(), style: const TextStyle(color: Colors.amber)),
+                  ),
+                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(email, style: const TextStyle(color: Colors.white54)),
+                      const SizedBox(height: 4),
+                      Text("Joined: $joinedAt", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    ],
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.verified_user_outlined, color: Colors.green),
+                        onPressed: () {
+                           // TODO: Add verification logic
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Verify feature coming in Phase 2")));
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.block, color: Colors.red),
+                        onPressed: () {
+                           // TODO: Add ban logic
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ban feature coming in Phase 2")));
+                        },
+                      ),
+                    ],
                   ),
                 ),
               );
