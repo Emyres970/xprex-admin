@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:go_router/go_router.dart'; 
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -16,6 +17,46 @@ class DashboardPage extends StatelessWidget {
         title: const Text("THE ROSTER"),
         backgroundColor: Colors.black,
         actions: [
+          // NOTIFICATION BELL
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: Supabase.instance.client
+                .from('verification_requests') 
+                .stream(primaryKey: ['id'])
+                .eq('status', 'pending'), 
+            builder: (context, snapshot) {
+              final count = snapshot.data?.length ?? 0;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications),
+                    onPressed: () => context.push('/verification'), 
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          count.toString(),
+                          style: const TextStyle(
+                            color: Colors.white, 
+                            fontSize: 10, 
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          // LOGOUT BUTTON
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.redAccent),
             onPressed: () => Supabase.instance.client.auth.signOut(),
@@ -39,8 +80,8 @@ class DashboardPage extends StatelessWidget {
               final user = users[index];
               final name = user['full_name'] ?? user['username'] ?? 'Unknown Agent';
               final email = user['email'] ?? 'No Email';
-              final isVerified = user['is_verified'] ?? false; // Assuming you have this column
-              final isPremium = user['is_premium'] ?? false; // Assuming you have this column
+              final isVerified = user['is_verified'] ?? false; 
+              final isPremium = user['is_premium'] ?? false; 
 
               return Card(
                 elevation: 0,
@@ -71,34 +112,10 @@ class DashboardPage extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _ActionButton(
-                            icon: Icons.badge, 
-                            label: "Verify", 
-                            color: Colors.blue,
-                            onTap: () => _toggleStatus(context, user['id'], 'is_verified', !isVerified),
-                          ),
-                          _ActionButton(
-                            icon: Icons.star, 
-                            label: "Premium", 
-                            color: Colors.amber,
-                            onTap: () => _toggleStatus(context, user['id'], 'is_premium', !isPremium),
-                          ),
-                          _ActionButton(
-                            icon: Icons.account_balance, 
-                            label: "Bank", 
-                            color: Colors.grey,
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bank Details View coming in next update.")));
-                            },
-                          ),
-                          _ActionButton(
-                            icon: Icons.block, 
-                            label: "Ban", 
-                            color: Colors.red,
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ban Logic coming in next update.")));
-                            },
-                          ),
+                          _ActionButton(icon: Icons.badge, label: "Verify", color: Colors.blue, onTap: () => _toggleStatus(context, user['id'], 'is_verified', !isVerified)),
+                          _ActionButton(icon: Icons.star, label: "Premium", color: Colors.amber, onTap: () => _toggleStatus(context, user['id'], 'is_premium', !isPremium)),
+                          _ActionButton(icon: Icons.account_balance, label: "Bank", color: Colors.grey, onTap: () {}),
+                          _ActionButton(icon: Icons.block, label: "Ban", color: Colors.red, onTap: () {}),
                         ],
                       )
                     ],
@@ -127,9 +144,7 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
-
   const _ActionButton({required this.icon, required this.label, required this.color, required this.onTap});
-
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -137,13 +152,7 @@ class _ActionButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: color, fontSize: 10)),
-          ],
-        ),
+        child: Column(children: [Icon(icon, color: color, size: 20), const SizedBox(height: 4), Text(label, style: TextStyle(color: color, fontSize: 10))]),
       ),
     );
   }
