@@ -1,195 +1,82 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:go_router/go_router.dart'; // Needed for context.push
 
-class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key});
+// Import your screens
+import '../auth/login_screen.dart';
+import '../dashboard/roster_screen.dart';
+import '../dashboard/verification_screen.dart'; 
 
-  @override
-  Widget build(BuildContext context) {
-    // The Roster Stream (Users)
-    final usersStream = Supabase.instance.client
-        .from('profiles')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("THE ROSTER"),
-        backgroundColor: Colors.black,
-        actions: [
-          // ----------------------------------------------------
-          // THE NOTIFICATION BELL (Real-time Listener)
-          // ----------------------------------------------------
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream: Supabase.instance.client
-                .from('verification_requests') // Listening to plural table
-                .stream(primaryKey: ['id'])
-                .eq('status', 'pending'), // Only pending items
-            builder: (context, snapshot) {
-              final count = snapshot.data?.length ?? 0;
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications),
-                    onPressed: () => context.push('/verification'), // Go to Queue
-                  ),
-                  if (count > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          count.toString(),
-                          style: const TextStyle(
-                            color: Colors.white, 
-                            fontSize: 10, 
-                            fontWeight: FontWeight.bold
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          
-          // LOGOUT BUTTON
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
-            onPressed: () => Supabase.instance.client.auth.signOut(),
-          ),
-        ],
-      ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: usersStream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.amber));
-
-          final users = snapshot.data!;
-          if (users.isEmpty) return const Center(child: Text("No soldiers found yet."));
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: users.length,
-            separatorBuilder: (c, i) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final user = users[index];
-              final name = user['full_name'] ?? user['username'] ?? 'Unknown Agent';
-              final email = user['email'] ?? 'No Email';
-              final isVerified = user['is_verified'] ?? false; 
-              final isPremium = user['is_premium'] ?? false; 
-
-              return Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white10)),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: CircleAvatar(
-                          backgroundColor: isPremium ? Colors.amber : Colors.grey.withOpacity(0.2),
-                          foregroundColor: isPremium ? Colors.black : Colors.white,
-                          child: Text(name.isNotEmpty ? name[0].toUpperCase() : "?"),
-                        ),
-                        title: Row(
-                          children: [
-                            Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                            if (isVerified) const Padding(
-                              padding: EdgeInsets.only(left: 6),
-                              child: Icon(Icons.verified, size: 16, color: Colors.blue),
-                            ),
-                          ],
-                        ),
-                        subtitle: Text(email, style: const TextStyle(color: Colors.white54)),
-                      ),
-                      const Divider(color: Colors.white10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _ActionButton(
-                            icon: Icons.badge, 
-                            label: "Verify", 
-                            color: Colors.blue,
-                            onTap: () => _toggleStatus(context, user['id'], 'is_verified', !isVerified),
-                          ),
-                          _ActionButton(
-                            icon: Icons.star, 
-                            label: "Premium", 
-                            color: Colors.amber,
-                            onTap: () => _toggleStatus(context, user['id'], 'is_premium', !isPremium),
-                          ),
-                          _ActionButton(
-                            icon: Icons.account_balance, 
-                            label: "Bank", 
-                            color: Colors.grey,
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bank Details View coming in next update.")));
-                            },
-                          ),
-                          _ActionButton(
-                            icon: Icons.block, 
-                            label: "Ban", 
-                            color: Colors.red,
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ban Logic coming in next update.")));
-                            },
-                          ),
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
+// -----------------------------------------------------------------------------
+// THE LISTENER CLASS (The Fix for the "Refresh Bug")
+// -----------------------------------------------------------------------------
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<AuthState> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen(
+      (AuthState authState) {
+        notifyListeners();
+      },
     );
   }
 
-  Future<void> _toggleStatus(BuildContext context, String userId, String column, bool newValue) async {
-    try {
-      await Supabase.instance.client.from('profiles').update({column: newValue}).eq('id', userId);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Updated $column to $newValue")));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
+// -----------------------------------------------------------------------------
+// THE ROUTER CONFIG
+// -----------------------------------------------------------------------------
+final appRouter = GoRouter(
+  initialLocation: '/',
+  // Forces a re-check whenever Auth state changes
+  refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
+  
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const LoginPage(),
+    ),
+    GoRoute(
+      path: '/dashboard',
+      builder: (context, state) => const DashboardPage(),
+    ),
+    GoRoute(
+      path: '/verification',
+      builder: (context, state) => const VerificationScreen(),
+    ),
+  ],
+  
+  redirect: (context, state) {
+    final session = Supabase.instance.client.auth.currentSession;
+    final onLoginPage = state.uri.toString() == '/';
+
+    // 1. If not logged in, force them to Login Page
+    if (session == null) {
+      return '/';
     }
-  }
-}
 
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
+    // 2. THE GATEKEEPER (Security Check)
+    final email = session.user.email;
+    const adminEmail = 'rudeboyemyres@gmail.com'; // YOUR EMAIL
 
-  const _ActionButton({required this.icon, required this.label, required this.color, required this.onTap});
+    if (email != adminEmail) {
+      Supabase.instance.client.auth.signOut();
+      return '/';
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: color, fontSize: 10)),
-          ],
-        ),
-      ),
-    );
-  }
-}
+    // 3. If they are authorized and stuck on Login Page, send to Dashboard
+    if (onLoginPage) {
+      return '/dashboard';
+    }
+
+    // 4. No action needed
+    return null; 
+  },
+);
