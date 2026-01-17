@@ -6,23 +6,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // Import your screens
 import '../auth/login_screen.dart';
 import '../dashboard/roster_screen.dart';
-import '../dashboard/verification_screen.dart'; 
+import '../dashboard/verification_screen.dart';
+import '../dashboard/user_detail_screen.dart'; // <--- NEW IMPORT
 
-// -----------------------------------------------------------------------------
-// THE LISTENER CLASS (The Fix for the "Refresh Bug")
-// -----------------------------------------------------------------------------
+// LISTENER CLASS (No changes here)
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<AuthState> stream) {
     notifyListeners();
-    _subscription = stream.asBroadcastStream().listen(
-      (AuthState authState) {
-        notifyListeners();
-      },
-    );
+    _subscription = stream.asBroadcastStream().listen((AuthState authState) => notifyListeners());
   }
-
   late final StreamSubscription<dynamic> _subscription;
-
   @override
   void dispose() {
     _subscription.cancel();
@@ -30,12 +23,9 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 }
 
-// -----------------------------------------------------------------------------
-// THE ROUTER CONFIG
-// -----------------------------------------------------------------------------
+// ROUTER CONFIG
 final appRouter = GoRouter(
   initialLocation: '/',
-  // Forces a re-check whenever Auth state changes
   refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
   
   routes: [
@@ -51,32 +41,32 @@ final appRouter = GoRouter(
       path: '/verification',
       builder: (context, state) => const VerificationScreen(),
     ),
+    // NEW ROUTE: Dynamic User Profile
+    GoRoute(
+      path: '/user/:id',
+      builder: (context, state) {
+        // Extract the ID from the URL parameter
+        final id = state.pathParameters['id']!;
+        return UserDetailScreen(profileId: id);
+      },
+    ),
   ],
   
   redirect: (context, state) {
     final session = Supabase.instance.client.auth.currentSession;
     final onLoginPage = state.uri.toString() == '/';
 
-    // 1. If not logged in, force them to Login Page
-    if (session == null) {
-      return '/';
-    }
+    if (session == null) return '/';
 
-    // 2. THE GATEKEEPER (Security Check)
     final email = session.user.email;
-    const adminEmail = 'rudeboyemyres@gmail.com'; // YOUR EMAIL
+    const adminEmail = 'rudeboyemyres@gmail.com'; 
 
     if (email != adminEmail) {
       Supabase.instance.client.auth.signOut();
       return '/';
     }
 
-    // 3. If they are authorized and stuck on Login Page, send to Dashboard
-    if (onLoginPage) {
-      return '/dashboard';
-    }
-
-    // 4. No action needed
+    if (onLoginPage) return '/dashboard';
     return null; 
   },
 );
