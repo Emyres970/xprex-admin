@@ -8,7 +8,7 @@ class VerificationScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // LISTENING TO THE QUEUE
     final requestStream = Supabase.instance.client
-        .from('verification_requests') // CORRECTED: Plural
+        .from('verification_requests')
         .stream(primaryKey: ['id'])
         .eq('status', 'pending')
         .order('created_at', ascending: true);
@@ -48,17 +48,49 @@ class VerificationScreen extends StatelessWidget {
 
               return Card(
                 color: const Color(0xFF1E1E1E),
-                margin: const EdgeInsets.only(bottom: 16),
+                margin: const EdgeInsets.only(bottom: 24),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white10)),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ListTile(
-                      leading: const Icon(Icons.badge, color: Colors.amber),
-                      title: Text("Request from User...", style: const TextStyle(color: Colors.white)),
-                      subtitle: Text("ID: $userId", style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                    // 1. HEADER: USER PROFILE INFO (Fetched Dynamically)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: const BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                      ),
+                      child: FutureBuilder<Map<String, dynamic>>(
+                        future: _fetchUserProfile(userId),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) return const Text("Loading User Details...", style: TextStyle(color: Colors.grey));
+                          
+                          final profile = snapshot.data!;
+                          final name = profile['full_name'] ?? profile['username'] ?? 'Unknown';
+                          final email = profile['email'] ?? 'No Email'; // Ensure your profiles table has email or join auth
+                          
+                          return Row(
+                            children: [
+                              const Icon(Icons.person, color: Colors.amber),
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+                                  Text(email, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                  Text("User ID: $userId", style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                                ],
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ),
+
+                    // 2. THE ID CARD IMAGE
                     if (docUrl != null)
                       Container(
-                        height: 250,
+                        height: 300,
                         width: double.infinity,
                         color: Colors.black,
                         child: Image.network(
@@ -68,6 +100,8 @@ class VerificationScreen extends StatelessWidget {
                           errorBuilder: (c, e, s) => const Center(child: Text("Image Load Failed", style: TextStyle(color: Colors.red))),
                         ),
                       ),
+
+                    // 3. ACTION BUTTONS
                     Padding(
                       padding: const EdgeInsets.all(12.0),
                       child: Row(
@@ -75,8 +109,11 @@ class VerificationScreen extends StatelessWidget {
                           Expanded(
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.delete_forever, color: Colors.white),
-                              label: const Text("REJECT (DELETE)", style: TextStyle(color: Colors.white)),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                              label: const Text("REJECT", style: TextStyle(color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red.withOpacity(0.8),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
                               onPressed: () => _rejectRequest(context, requestId),
                             ),
                           ),
@@ -85,7 +122,10 @@ class VerificationScreen extends StatelessWidget {
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.check_circle, color: Colors.black),
                               label: const Text("APPROVE", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
                               onPressed: () => _approveUser(context, requestId, userId),
                             ),
                           ),
@@ -102,18 +142,30 @@ class VerificationScreen extends StatelessWidget {
     );
   }
 
+  // HELPER: Fetch Profile Data for Context
+  Future<Map<String, dynamic>> _fetchUserProfile(String userId) async {
+    try {
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .single();
+      return data;
+    } catch (e) {
+      return {'full_name': 'Error Loading Profile', 'email': 'Unknown'};
+    }
+  }
+
   Future<void> _rejectRequest(BuildContext context, dynamic id) async {
-    // Delete from plural table
     await Supabase.instance.client.from('verification_requests').delete().eq('id', id);
     if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Request Rejected & Deleted")));
   }
 
   Future<void> _approveUser(BuildContext context, dynamic reqId, String userId) async {
     try {
-      // 1. Mark request as approved in plural table
+      // 1. Approve Request
       await Supabase.instance.client.from('verification_requests').update({'status': 'approved'}).eq('id', reqId);
-      
-      // 2. Update the actual Profile to Verified
+      // 2. Verify User
       await Supabase.instance.client.from('profiles').update({'is_verified': true}).eq('id', userId);
       
       if (context.mounted) {
