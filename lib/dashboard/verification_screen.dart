@@ -53,7 +53,7 @@ class VerificationScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. HEADER: USER PROFILE INFO (Fetched Dynamically)
+                    // 1. HEADER: USER PROFILE INFO (Fetched Dynamically with Smart Search)
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: const BoxDecoration(
@@ -66,20 +66,30 @@ class VerificationScreen extends StatelessWidget {
                           if (!snapshot.hasData) return const Text("Loading User Details...", style: TextStyle(color: Colors.grey));
                           
                           final profile = snapshot.data!;
-                          final name = profile['full_name'] ?? profile['username'] ?? 'Unknown';
-                          final email = profile['email'] ?? 'No Email'; // Ensure your profiles table has email or join auth
+                          // Checks for multiple possible name columns to be safe
+                          final name = profile['display_name'] ?? profile['full_name'] ?? profile['username'] ?? 'Unknown';
+                          final email = profile['email'] ?? 'No Email';
+                          final username = profile['username'] ?? '';
                           
                           return Row(
                             children: [
-                              const Icon(Icons.person, color: Colors.amber),
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: Colors.amber.withOpacity(0.2),
+                                child: Text(name.isNotEmpty ? name[0].toUpperCase() : "?", style: const TextStyle(color: Colors.amber)),
+                              ),
                               const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
-                                  Text(email, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                  Text("User ID: $userId", style: const TextStyle(color: Colors.grey, fontSize: 10)),
-                                ],
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+                                    if (username.isNotEmpty)
+                                      Text("@$username", style: const TextStyle(color: Colors.amber, fontSize: 12)),
+                                    Text(email, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                    Text("ID: $userId", style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                                  ],
+                                ),
                               ),
                             ],
                           );
@@ -142,17 +152,35 @@ class VerificationScreen extends StatelessWidget {
     );
   }
 
-  // HELPER: Fetch Profile Data for Context
+  // HELPER: Smart Fetch (Checks auth_user_id first, then id)
   Future<Map<String, dynamic>> _fetchUserProfile(String userId) async {
     try {
-      final data = await Supabase.instance.client
+      // 1. Try finding by auth_user_id (The most likely link)
+      final dataByAuth = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('auth_user_id', userId)
+          .maybeSingle();
+
+      if (dataByAuth != null) return dataByAuth;
+
+      // 2. Fallback: Try finding by primary key 'id'
+      final dataById = await Supabase.instance.client
           .from('profiles')
           .select()
           .eq('id', userId)
-          .single();
-      return data;
+          .maybeSingle();
+
+      if (dataById != null) return dataById;
+
+      // 3. If neither works, return a placeholder instead of crashing
+      return {
+        'display_name': 'Profile Not Found', 
+        'email': 'ID: $userId', 
+        'username': 'Unknown'
+      };
     } catch (e) {
-      return {'full_name': 'Error Loading Profile', 'email': 'Unknown'};
+      return {'display_name': 'Fetch Error', 'email': e.toString()};
     }
   }
 
@@ -165,8 +193,14 @@ class VerificationScreen extends StatelessWidget {
     try {
       // 1. Approve Request
       await Supabase.instance.client.from('verification_requests').update({'status': 'approved'}).eq('id', reqId);
-      // 2. Verify User
-      await Supabase.instance.client.from('profiles').update({'is_verified': true}).eq('id', userId);
+      
+      // 2. Verify User (Try updating by auth_user_id first, then id)
+      try {
+        await Supabase.instance.client.from('profiles').update({'is_verified': true}).eq('auth_user_id', userId);
+      } catch (_) {
+         // If that fails, try the ID directly
+        await Supabase.instance.client.from('profiles').update({'is_verified': true}).eq('id', userId);
+      }
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User Verified Successfully!")));
