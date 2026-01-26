@@ -34,6 +34,7 @@ class UserDetailScreen extends StatelessWidget {
           final email = user['email'] ?? 'No Email';
           final username = user['username'] ?? 'No Handle';
           final bio = user['bio'] ?? 'No bio provided.';
+          final address = user['address'] ?? 'No Address Provided'; // <--- NEW LOGISTICS DATA
           final isVerified = user['is_verified'] ?? false;
           final isPremium = user['is_premium'] ?? false;
           final joinedAt = user['created_at'] ?? 'Unknown Date';
@@ -51,7 +52,7 @@ class UserDetailScreen extends StatelessWidget {
                         radius: 50,
                         backgroundColor: isPremium ? Colors.amber : Colors.grey.shade800,
                         child: Text(
-                          name[0].toUpperCase(),
+                          name.isNotEmpty ? name[0].toUpperCase() : "?",
                           style: TextStyle(fontSize: 40, color: isPremium ? Colors.black : Colors.white),
                         ),
                       ),
@@ -90,6 +91,8 @@ class UserDetailScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       _buildInfoRow("User ID", profileId, canCopy: true),
+                      const Divider(color: Colors.white10),
+                      _buildInfoRow("Location", address, canCopy: true), // <--- NEW ADDRESS ROW
                       const Divider(color: Colors.white10),
                       _buildInfoRow("Bio", bio),
                       const Divider(color: Colors.white10),
@@ -155,6 +158,7 @@ class UserDetailScreen extends StatelessWidget {
             GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: value));
+                // Optional: Show a tiny toast confirming copy if you want, but icon feedback is usually enough
               },
               child: const Icon(Icons.copy, size: 16, color: Colors.amber),
             )
