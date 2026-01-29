@@ -9,6 +9,7 @@ class UserDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Live Stream of the User Profile
     final userStream = Supabase.instance.client
         .from('profiles')
         .stream(primaryKey: ['id'])
@@ -28,6 +29,7 @@ class UserDetailScreen extends StatelessWidget {
 
           final user = snapshot.data!.first;
           
+          // Data Extraction
           final name = user['display_name'] ?? user['full_name'] ?? user['username'] ?? 'Unknown';
           final email = user['email'] ?? 'No Email';
           final username = user['username'] ?? 'No Handle';
@@ -45,6 +47,7 @@ class UserDetailScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 1. HEADER
                 Center(
                   child: Column(
                     children: [
@@ -71,6 +74,7 @@ class UserDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
 
+                // 2. DOCS
                 const Text("VERIFICATION DOCUMENTS", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 FutureBuilder<Map<String, dynamic>?>(
@@ -113,6 +117,7 @@ class UserDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
 
+                // 3. SAFE STATUS CONTROLS (Switches)
                 const Text("STATUS CONTROLS", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 Container(
@@ -129,6 +134,7 @@ class UserDetailScreen extends StatelessWidget {
 
                 const SizedBox(height: 32),
 
+                // 4. INTEL
                 const Text("INTEL", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 Container(
@@ -149,6 +155,7 @@ class UserDetailScreen extends StatelessWidget {
                 
                 const SizedBox(height: 32),
                 
+                // 5. DANGER ZONE (Ban Button)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -169,7 +176,7 @@ class UserDetailScreen extends StatelessWidget {
     );
   }
 
-  // --- HELPERS ---
+  // --- SAFETY HELPERS ---
 
   Future<void> _confirmBanToggle(BuildContext context, String userName, bool isCurrentlyBanned) async {
     final action = isCurrentlyBanned ? "UNBAN" : "BAN";
@@ -192,21 +199,39 @@ class UserDetailScreen extends StatelessWidget {
     );
 
     if (confirmed == true) {
-      // USING VERBOSE ERROR HANDLING HERE TOO
-      try {
-        await Supabase.instance.client.from('profiles').update({'is_banned': !isCurrentlyBanned}).eq('id', profileId);
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("User $action successful")));
-      } on PostgrestException catch (error) {
-        if(context.mounted) {
-          showDialog(context: context, builder: (c) => AlertDialog(
-            title: const Text("DATABASE ERROR"),
-            content: Text("Code: ${error.code}\nMessage: ${error.message}"),
-            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))],
-          ));
-        }
-      } catch (e) {
-        if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      await _executeUpdate(context, 'is_banned', !isCurrentlyBanned);
+    }
+  }
+
+  // Helper to update any column with verbose error logging
+  Future<void> _executeUpdate(BuildContext context, String column, dynamic newValue) async {
+    try {
+      debugPrint("Updating $column to $newValue...");
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .update({column: newValue})
+          .eq('id', profileId)
+          .select(); // Force return to check if it worked
+
+      if (data.isEmpty) {
+        throw "DATABASE REJECTED UPDATE. Zero rows affected. (RLS Blocked?)";
       }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("SUCCESS: Updated $column"), backgroundColor: Colors.green)
+        );
+      }
+    } on PostgrestException catch (error) {
+      if(context.mounted) {
+        showDialog(context: context, builder: (c) => AlertDialog(
+          title: const Text("DATABASE ERROR"),
+          content: Text("Code: ${error.code}\nMessage: ${error.message}\nDetails: ${error.details}"),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))],
+        ));
+      }
+    } catch (e) {
+      if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     }
   }
 
@@ -231,6 +256,8 @@ class UserDetailScreen extends StatelessWidget {
       return "${date.year}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')}";
     } catch (_) { return isoString; }
   }
+
+  // --- SAFE WIDGET BUILDERS ---
 
   Widget _buildSafeSwitch(BuildContext context, String label, bool currentValue, IconData icon, Color color, String dbColumn) {
     return Row(
@@ -261,19 +288,7 @@ class UserDetailScreen extends StatelessWidget {
             );
 
             if (confirmed == true) {
-              // VERBOSE ERROR LOGGING FOR SWITCHES
-              try {
-                await Supabase.instance.client.from('profiles').update({dbColumn: newValue}).eq('id', profileId);
-                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Updated $label")));
-              } on PostgrestException catch (error) {
-                if(context.mounted) {
-                  showDialog(context: context, builder: (c) => AlertDialog(
-                    title: const Text("DATABASE ERROR"),
-                    content: Text("Code: ${error.code}\nMessage: ${error.message}\nHint: ${error.hint}"),
-                    actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))],
-                  ));
-                }
-              }
+              await _executeUpdate(context, dbColumn, newValue);
             }
           },
         ),
