@@ -7,9 +7,9 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Check who is actually logged in (Debug Info)
-    final currentUser = Supabase.instance.client.auth.currentUser;
-    debugPrint("DEBUG: Logged in as Auth ID: ${currentUser?.id}");
+    // DEBUG: Print YOUR Identity so we can check it against the database
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    debugPrint("👑 I AM LOGGED IN AS: $myId");
 
     final usersStream = Supabase.instance.client
         .from('profiles')
@@ -147,31 +147,34 @@ class DashboardPage extends StatelessWidget {
 
   Future<void> _toggleStatus(BuildContext context, String userId, String column, bool newValue) async {
     try {
-      // DEBUG: Printing the exact command being sent
-      debugPrint("Attempting to update $column to $newValue for user $userId");
+      // THE FIX: We use .select() to ask Supabase "Did you actually do it?"
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .update({column: newValue})
+          .eq('id', userId)
+          .select(); // <--- CRITICAL: This forces the DB to return the updated row
       
-      await Supabase.instance.client.from('profiles').update({column: newValue}).eq('id', userId);
-      
+      // THE TRUTH CHECK
+      if (data.isEmpty) {
+        throw "ACCESS DENIED (RLS BLOCKED). The database ignored the update because it doesn't recognize you as an Admin.";
+      }
+
       if(context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("SUCCESS: Updated $column!"), 
           backgroundColor: Colors.green
         ));
       }
-    } on PostgrestException catch (error) {
-      // 🚨 CATCHING THE REAL DATABASE ERROR
-      debugPrint("SUPABASE ERROR: ${error.message} (Code: ${error.code})");
+    } catch (e) {
+      debugPrint("ERROR: $e");
       if(context.mounted) {
+        // Show the REAL error
         showDialog(context: context, builder: (c) => AlertDialog(
-          title: const Text("DATABASE ERROR"),
-          content: Text("Code: ${error.code}\nMessage: ${error.message}\nDetails: ${error.details}"),
+          title: const Text("UPDATE FAILED", style: TextStyle(color: Colors.red)),
+          content: Text(e.toString()),
           actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))],
         ));
       }
-    } catch (e) {
-      // Catch generic Flutter errors
-      debugPrint("GENERIC ERROR: $e");
-      if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     }
   }
 }
