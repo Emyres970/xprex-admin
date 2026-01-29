@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For clipboard copy
+import 'package:flutter/services.dart'; 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class UserDetailScreen extends StatelessWidget {
@@ -9,7 +9,6 @@ class UserDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Stream specific to this user so updates (like verification) happen live
     final userStream = Supabase.instance.client
         .from('profiles')
         .stream(primaryKey: ['id'])
@@ -29,7 +28,6 @@ class UserDetailScreen extends StatelessWidget {
 
           final user = snapshot.data!.first;
           
-          // Data Extraction
           final name = user['display_name'] ?? user['full_name'] ?? user['username'] ?? 'Unknown';
           final email = user['email'] ?? 'No Email';
           final username = user['username'] ?? 'No Handle';
@@ -38,31 +36,26 @@ class UserDetailScreen extends StatelessWidget {
           final isVerified = user['is_verified'] ?? false;
           final isPremium = user['is_premium'] ?? false;
           final joinedAt = user['created_at'] ?? 'Unknown Date';
-          final avatarUrl = user['avatar_url']; // Check for profile picture
-          final authUserId = user['auth_user_id'] ?? profileId; // Link to verification table
+          final avatarUrl = user['avatar_url']; 
+          final authUserId = user['auth_user_id'] ?? profileId; 
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. HEADER IDENTITY (With Clickable Avatar)
+                // 1. HEADER
                 Center(
                   child: Column(
                     children: [
                       GestureDetector(
-                        onTap: avatarUrl != null 
-                            ? () => _openFullScreenImage(context, avatarUrl, "Profile Avatar") 
-                            : null,
+                        onTap: avatarUrl != null ? () => _openFullScreenImage(context, avatarUrl, "Profile Avatar") : null,
                         child: CircleAvatar(
                           radius: 50,
                           backgroundColor: isPremium ? Colors.amber : Colors.grey.shade800,
                           backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
                           child: avatarUrl == null 
-                            ? Text(
-                                name.isNotEmpty ? name[0].toUpperCase() : "?",
-                                style: TextStyle(fontSize: 40, color: isPremium ? Colors.black : Colors.white),
-                              )
+                            ? Text(name.isNotEmpty ? name[0].toUpperCase() : "?", style: TextStyle(fontSize: 40, color: isPremium ? Colors.black : Colors.white))
                             : null,
                         ),
                       ),
@@ -75,16 +68,13 @@ class UserDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
 
-                // 2. VERIFICATION DOCUMENTS
+                // 2. DOCS
                 const Text("VERIFICATION DOCUMENTS", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 FutureBuilder<Map<String, dynamic>?>(
                   future: _fetchLatestVerificationDoc(authUserId),
                   builder: (context, docSnapshot) {
-                    if (docSnapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: LinearProgressIndicator(color: Colors.amber));
-                    }
-                    
+                    if (docSnapshot.connectionState == ConnectionState.waiting) return const Center(child: LinearProgressIndicator(color: Colors.amber));
                     final doc = docSnapshot.data;
                     if (doc == null) {
                       return Container(
@@ -94,43 +84,24 @@ class UserDetailScreen extends StatelessWidget {
                         child: const Text("No ID Documents Uploaded", style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic)),
                       );
                     }
-
-                    final docUrl = doc['id_document_url'];
-                    final uploadedAt = doc['created_at'];
-
                     return GestureDetector(
-                      onTap: () => _openFullScreenImage(context, docUrl, "ID Document"),
+                      onTap: () => _openFullScreenImage(context, doc['id_document_url'], "ID Document"),
                       child: Container(
                         width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E1E1E), 
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white10)
-                        ),
+                        decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             ClipRRect(
                               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                              child: AspectRatio(
-                                aspectRatio: 16/9,
-                                child: Image.network(
-                                  docUrl,
-                                  fit: BoxFit.cover,
-                                  loadingBuilder: (c, child, p) => p == null ? child : const Center(child: CircularProgressIndicator()),
-                                  errorBuilder: (c, e, s) => const Center(child: Icon(Icons.broken_image, color: Colors.red)),
-                                ),
-                              ),
+                              child: AspectRatio(aspectRatio: 16/9, child: Image.network(doc['id_document_url'], fit: BoxFit.cover)),
                             ),
                             Padding(
                               padding: const EdgeInsets.all(12),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text("Latest ID Upload", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                  Text(uploadedAt != null ? _formatDate(uploadedAt) : "", style: const TextStyle(color: Colors.grey, fontSize: 10)),
-                                ],
-                              ),
+                              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                const Text("Latest ID Upload", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                Text(doc['created_at'] != null ? _formatDate(doc['created_at']) : "", style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                              ]),
                             ),
                           ],
                         ),
@@ -140,7 +111,7 @@ class UserDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
 
-                // 3. STATUS CONTROLS
+                // 3. SAFE STATUS CONTROLS
                 const Text("STATUS CONTROLS", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 Container(
@@ -148,16 +119,16 @@ class UserDetailScreen extends StatelessWidget {
                   decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
                   child: Column(
                     children: [
-                      _buildSwitch(context, "Verified Status", isVerified, Icons.verified, Colors.blue, 'is_verified'),
+                      _buildSafeSwitch(context, "Verified Status", isVerified, Icons.verified, Colors.blue, 'is_verified'),
                       const Divider(color: Colors.white10),
-                      _buildSwitch(context, "Premium Status", isPremium, Icons.star, Colors.amber, 'is_premium'),
+                      _buildSafeSwitch(context, "Premium Status", isPremium, Icons.star, Colors.amber, 'is_premium'),
                     ],
                   ),
                 ),
 
                 const SizedBox(height: 32),
 
-                // 4. INTEL (Now passing 'context' correctly)
+                // 4. INTEL
                 const Text("INTEL", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 Container(
@@ -185,9 +156,7 @@ class UserDetailScreen extends StatelessWidget {
                     icon: const Icon(Icons.block, color: Colors.white),
                     label: const Text("BAN USER (COMING SOON)", style: TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red.withOpacity(0.2)),
-                    onPressed: () {
-                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nuclear option disabled in MVP.")));
-                    },
+                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nuclear option disabled in MVP."))),
                   ),
                 )
               ],
@@ -198,59 +167,32 @@ class UserDetailScreen extends StatelessWidget {
     );
   }
 
-  // --- LOGIC HELPERS ---
-
+  // --- HELPERS ---
   Future<Map<String, dynamic>?> _fetchLatestVerificationDoc(String userId) async {
     try {
-      final data = await Supabase.instance.client
-          .from('verification_requests')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false) // Get the newest one
-          .limit(1)
-          .maybeSingle();
-      return data;
-    } catch (e) {
-      debugPrint("Error fetching docs: $e");
-      return null;
-    }
+      return await Supabase.instance.client.from('verification_requests')
+          .select().eq('user_id', userId).order('created_at', ascending: false).limit(1).maybeSingle();
+    } catch (_) { return null; }
   }
 
   void _openFullScreenImage(BuildContext context, String imageUrl, String title) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            title: Text(title),
-            iconTheme: const IconThemeData(color: Colors.white),
-          ),
-          body: Center(
-            child: InteractiveViewer(
-              panEnabled: true,
-              minScale: 0.5,
-              maxScale: 4.0,
-              child: Image.network(imageUrl),
-            ),
-          ),
-        ),
-      ),
-    );
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(backgroundColor: Colors.black, title: Text(title), iconTheme: const IconThemeData(color: Colors.white)),
+      body: Center(child: InteractiveViewer(minScale: 0.5, maxScale: 4.0, child: Image.network(imageUrl))),
+    )));
   }
 
   String _formatDate(String isoString) {
     try {
       final date = DateTime.parse(isoString);
       return "${date.year}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')}";
-    } catch (_) {
-      return isoString;
-    }
+    } catch (_) { return isoString; }
   }
 
-  // --- WIDGET BUILDERS ---
+  // --- SAFE WIDGET BUILDERS ---
 
-  Widget _buildSwitch(BuildContext context, String label, bool value, IconData icon, Color color, String dbColumn) {
+  Widget _buildSafeSwitch(BuildContext context, String label, bool currentValue, IconData icon, Color color, String dbColumn) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -262,18 +204,33 @@ class UserDetailScreen extends StatelessWidget {
           ],
         ),
         Switch(
-          value: value,
+          value: currentValue,
           activeColor: color,
           onChanged: (newValue) async {
-            await Supabase.instance.client.from('profiles').update({dbColumn: newValue}).eq('id', profileId);
-            if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Updated $label")));
+            // THE SAFETY CHECK
+            final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: const Color(0xFF1E1E1E),
+                title: Text("Change $label?", style: const TextStyle(color: Colors.white)),
+                content: const Text("This action will immediately update the user's status in the live database.", style: TextStyle(color: Colors.white70)),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL", style: TextStyle(color: Colors.grey))),
+                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("CONFIRM", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))),
+                ],
+              ),
+            );
+
+            if (confirmed == true) {
+              await Supabase.instance.client.from('profiles').update({dbColumn: newValue}).eq('id', profileId);
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Updated $label")));
+            }
           },
         ),
       ],
     );
   }
 
-  // FIXED: Now accepts 'BuildContext context' so we can show SnackBars
   Widget _buildInfoRow(BuildContext context, String label, String value, {bool canCopy = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -286,7 +243,6 @@ class UserDetailScreen extends StatelessWidget {
             GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: value));
-                // Now we can safely use 'context'
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied to clipboard"), duration: Duration(milliseconds: 500)));
               },
               child: const Icon(Icons.copy, size: 16, color: Colors.amber),
