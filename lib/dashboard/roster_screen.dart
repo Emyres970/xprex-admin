@@ -50,12 +50,16 @@ class DashboardPage extends StatelessWidget {
               final email = user['email'] ?? 'No Email';
               final isVerified = user['is_verified'] ?? false;
               final isPremium = user['is_premium'] ?? false;
+              final isBanned = user['is_banned'] ?? false; // <--- NEW: Get Ban Status
               final userId = user['id']; 
 
               return Card(
                 elevation: 0,
                 color: const Color(0xFF1E1E1E),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.white10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12), 
+                  side: BorderSide(color: isBanned ? Colors.red.withOpacity(0.5) : Colors.white10) // Red border if banned
+                ),
                 child: InkWell(
                   onTap: () => context.push('/user/$userId'),
                   borderRadius: BorderRadius.circular(12),
@@ -66,14 +70,15 @@ class DashboardPage extends StatelessWidget {
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: CircleAvatar(
-                            backgroundColor: isPremium ? Colors.amber : Colors.grey.withOpacity(0.2),
-                            foregroundColor: isPremium ? Colors.black : Colors.white,
-                            child: Text(name.isNotEmpty ? name[0].toUpperCase() : "?"),
+                            backgroundColor: isBanned ? Colors.red : (isPremium ? Colors.amber : Colors.grey.withOpacity(0.2)),
+                            foregroundColor: isPremium && !isBanned ? Colors.black : Colors.white,
+                            child: isBanned ? const Icon(Icons.block, color: Colors.white) : Text(name.isNotEmpty ? name[0].toUpperCase() : "?"),
                           ),
                           title: Row(
                             children: [
-                              Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                              Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isBanned ? Colors.red : Colors.white)),
                               if (isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, size: 16, color: Colors.blue)),
+                              if (isBanned) const Padding(padding: EdgeInsets.only(left: 6), child: Text("(BANNED)", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold))),
                             ],
                           ),
                           subtitle: Text(email, style: const TextStyle(color: Colors.white54)),
@@ -98,7 +103,14 @@ class DashboardPage extends StatelessWidget {
                               onTap: () => _safeToggle(context, name, "Grant Premium", userId, 'is_premium', !isPremium)
                             ),
                             _ActionButton(icon: Icons.account_balance, label: "Bank", color: Colors.grey, onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bank module coming soon.")))),
-                            _ActionButton(icon: Icons.block, label: "Ban", color: Colors.red, onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ban module coming soon.")))),
+                            
+                            // REAL BAN BUTTON LOGIC
+                            _ActionButton(
+                              icon: isBanned ? Icons.restore : Icons.block, 
+                              label: isBanned ? "Unban" : "Ban", 
+                              color: isBanned ? Colors.green : Colors.red, 
+                              onTap: () => _safeToggle(context, name, isBanned ? "UNBAN USER?" : "BAN USER?", userId, 'is_banned', !isBanned)
+                            ),
                           ],
                         )
                       ],
