@@ -35,6 +35,7 @@ class UserDetailScreen extends StatelessWidget {
           final address = user['address'] ?? 'No Address Provided';
           final isVerified = user['is_verified'] ?? false;
           final isPremium = user['is_premium'] ?? false;
+          final isBanned = user['is_banned'] ?? false; // <--- NEW
           final joinedAt = user['created_at'] ?? 'Unknown Date';
           final avatarUrl = user['avatar_url']; 
           final authUserId = user['auth_user_id'] ?? profileId; 
@@ -52,15 +53,18 @@ class UserDetailScreen extends StatelessWidget {
                         onTap: avatarUrl != null ? () => _openFullScreenImage(context, avatarUrl, "Profile Avatar") : null,
                         child: CircleAvatar(
                           radius: 50,
-                          backgroundColor: isPremium ? Colors.amber : Colors.grey.shade800,
+                          backgroundColor: isBanned ? Colors.red : (isPremium ? Colors.amber : Colors.grey.shade800),
                           backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
                           child: avatarUrl == null 
-                            ? Text(name.isNotEmpty ? name[0].toUpperCase() : "?", style: TextStyle(fontSize: 40, color: isPremium ? Colors.black : Colors.white))
+                            ? (isBanned 
+                                ? const Icon(Icons.block, size: 40, color: Colors.white)
+                                : Text(name.isNotEmpty ? name[0].toUpperCase() : "?", style: TextStyle(fontSize: 40, color: isPremium ? Colors.black : Colors.white)))
                             : null,
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text(name, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isBanned ? Colors.red : Colors.white)),
+                      if (isBanned) const Text("🚫 CURRENTLY BANNED", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                       Text("@$username", style: const TextStyle(color: Colors.amber, fontSize: 16)),
                       Text(email, style: const TextStyle(color: Colors.grey)),
                     ],
@@ -149,14 +153,17 @@ class UserDetailScreen extends StatelessWidget {
                 
                 const SizedBox(height: 32),
                 
-                // 5. DANGER ZONE
+                // 5. DANGER ZONE (REAL FUNCTIONALITY)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    icon: const Icon(Icons.block, color: Colors.white),
-                    label: const Text("BAN USER (COMING SOON)", style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red.withOpacity(0.2)),
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nuclear option disabled in MVP."))),
+                    icon: Icon(isBanned ? Icons.restore : Icons.block, color: Colors.white),
+                    label: Text(isBanned ? "UNBAN USER" : "BAN USER", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isBanned ? Colors.green : Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    onPressed: () => _confirmBanToggle(context, name, isBanned),
                   ),
                 )
               ],
@@ -167,7 +174,34 @@ class UserDetailScreen extends StatelessWidget {
     );
   }
 
-  // --- HELPERS ---
+  // --- SAFETY HELPERS ---
+
+  Future<void> _confirmBanToggle(BuildContext context, String userName, bool isCurrentlyBanned) async {
+    final action = isCurrentlyBanned ? "UNBAN" : "BAN";
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text("$action $userName?", style: const TextStyle(color: Colors.white)),
+        content: Text(
+          isCurrentlyBanned 
+            ? "This will restore their access to the platform immediately."
+            : "This will immediately block their access to the platform.", 
+          style: const TextStyle(color: Colors.white70)
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("CONFIRM $action", style: TextStyle(color: isCurrentlyBanned ? Colors.green : Colors.red, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await Supabase.instance.client.from('profiles').update({'is_banned': !isCurrentlyBanned}).eq('id', profileId);
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("User $action successful")));
+    }
+  }
+
   Future<Map<String, dynamic>?> _fetchLatestVerificationDoc(String userId) async {
     try {
       return await Supabase.instance.client.from('verification_requests')
@@ -207,7 +241,6 @@ class UserDetailScreen extends StatelessWidget {
           value: currentValue,
           activeColor: color,
           onChanged: (newValue) async {
-            // THE SAFETY CHECK
             final confirmed = await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
