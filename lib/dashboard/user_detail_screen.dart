@@ -75,7 +75,7 @@ class UserDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
 
-                // 2. VERIFICATION DOCUMENTS (New Section)
+                // 2. VERIFICATION DOCUMENTS
                 const Text("VERIFICATION DOCUMENTS", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 FutureBuilder<Map<String, dynamic>?>(
@@ -157,7 +157,7 @@ class UserDetailScreen extends StatelessWidget {
 
                 const SizedBox(height: 32),
 
-                // 4. INTEL
+                // 4. INTEL (Now passing 'context' correctly)
                 const Text("INTEL", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 Container(
@@ -165,13 +165,13 @@ class UserDetailScreen extends StatelessWidget {
                   decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
                   child: Column(
                     children: [
-                      _buildInfoRow("User ID", profileId, canCopy: true),
+                      _buildInfoRow(context, "User ID", profileId, canCopy: true),
                       const Divider(color: Colors.white10),
-                      _buildInfoRow("Location", address, canCopy: true),
+                      _buildInfoRow(context, "Location", address, canCopy: true),
                       const Divider(color: Colors.white10),
-                      _buildInfoRow("Bio", bio),
+                      _buildInfoRow(context, "Bio", bio),
                       const Divider(color: Colors.white10),
-                      _buildInfoRow("Joined On", joinedAt.toString()),
+                      _buildInfoRow(context, "Joined On", joinedAt.toString()),
                     ],
                   ),
                 ),
@@ -273,7 +273,8 @@ class UserDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(String label, String value, {bool canCopy = false}) {
+  // FIXED: Now accepts 'BuildContext context' so we can show SnackBars
+  Widget _buildInfoRow(BuildContext context, String label, String value, {bool canCopy = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
@@ -285,6 +286,7 @@ class UserDetailScreen extends StatelessWidget {
             GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: value));
+                // Now we can safely use 'context'
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied to clipboard"), duration: Duration(milliseconds: 500)));
               },
               child: const Icon(Icons.copy, size: 16, color: Colors.amber),
