@@ -50,14 +50,13 @@ class DashboardPage extends StatelessWidget {
               final email = user['email'] ?? 'No Email';
               final isVerified = user['is_verified'] ?? false;
               final isPremium = user['is_premium'] ?? false;
-              final userId = user['id']; // This is the Profile ID
+              final userId = user['id']; 
 
               return Card(
                 elevation: 0,
                 color: const Color(0xFF1E1E1E),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.white10)),
                 child: InkWell(
-                  // NAVIGATE TO DOSSIER ON TAP
                   onTap: () => context.push('/user/$userId'),
                   borderRadius: BorderRadius.circular(12),
                   child: Padding(
@@ -81,14 +80,25 @@ class DashboardPage extends StatelessWidget {
                           trailing: const Icon(Icons.chevron_right, color: Colors.grey),
                         ),
                         const Divider(color: Colors.white10),
-                        // Quick Actions (Still here for speed)
+                        
+                        // SAFE QUICK ACTIONS
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            _ActionButton(icon: Icons.badge, label: "Verify", color: Colors.blue, onTap: () => _toggleStatus(context, userId, 'is_verified', !isVerified)),
-                            _ActionButton(icon: Icons.star, label: "Premium", color: Colors.amber, onTap: () => _toggleStatus(context, userId, 'is_premium', !isPremium)),
-                            _ActionButton(icon: Icons.account_balance, label: "Bank", color: Colors.grey, onTap: () {}),
-                            _ActionButton(icon: Icons.block, label: "Ban", color: Colors.red, onTap: () {}),
+                            _ActionButton(
+                              icon: Icons.badge, 
+                              label: "Verify", 
+                              color: Colors.blue, 
+                              onTap: () => _safeToggle(context, name, "Verify User", userId, 'is_verified', !isVerified)
+                            ),
+                            _ActionButton(
+                              icon: Icons.star, 
+                              label: "Premium", 
+                              color: Colors.amber, 
+                              onTap: () => _safeToggle(context, name, "Grant Premium", userId, 'is_premium', !isPremium)
+                            ),
+                            _ActionButton(icon: Icons.account_balance, label: "Bank", color: Colors.grey, onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bank module coming soon.")))),
+                            _ActionButton(icon: Icons.block, label: "Ban", color: Colors.red, onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ban module coming soon.")))),
                           ],
                         )
                       ],
@@ -103,8 +113,33 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
+  // --- SAFETY PROTOCOL HELPER ---
+  Future<void> _safeToggle(BuildContext context, String userName, String action, String userId, String column, bool newValue) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(action, style: const TextStyle(color: Colors.white)),
+        content: Text("Are you sure you want to change status for $userName?", style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("CONFIRM", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _toggleStatus(context, userId, column, newValue);
+    }
+  }
+
   Future<void> _toggleStatus(BuildContext context, String userId, String column, bool newValue) async {
-    await Supabase.instance.client.from('profiles').update({column: newValue}).eq('id', userId);
+    try {
+      await Supabase.instance.client.from('profiles').update({column: newValue}).eq('id', userId);
+      if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Updated $column successfully.")));
+    } catch (e) {
+      if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
   }
 }
 
