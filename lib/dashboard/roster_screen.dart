@@ -7,6 +7,10 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Check who is actually logged in (Debug Info)
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    debugPrint("DEBUG: Logged in as Auth ID: ${currentUser?.id}");
+
     final usersStream = Supabase.instance.client
         .from('profiles')
         .stream(primaryKey: ['id'])
@@ -50,7 +54,7 @@ class DashboardPage extends StatelessWidget {
               final email = user['email'] ?? 'No Email';
               final isVerified = user['is_verified'] ?? false;
               final isPremium = user['is_premium'] ?? false;
-              final isBanned = user['is_banned'] ?? false; // <--- NEW: Get Ban Status
+              final isBanned = user['is_banned'] ?? false;
               final userId = user['id']; 
 
               return Card(
@@ -58,7 +62,7 @@ class DashboardPage extends StatelessWidget {
                 color: const Color(0xFF1E1E1E),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12), 
-                  side: BorderSide(color: isBanned ? Colors.red.withOpacity(0.5) : Colors.white10) // Red border if banned
+                  side: BorderSide(color: isBanned ? Colors.red.withOpacity(0.5) : Colors.white10)
                 ),
                 child: InkWell(
                   onTap: () => context.push('/user/$userId'),
@@ -86,7 +90,6 @@ class DashboardPage extends StatelessWidget {
                         ),
                         const Divider(color: Colors.white10),
                         
-                        // SAFE QUICK ACTIONS
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
@@ -103,8 +106,6 @@ class DashboardPage extends StatelessWidget {
                               onTap: () => _safeToggle(context, name, "Grant Premium", userId, 'is_premium', !isPremium)
                             ),
                             _ActionButton(icon: Icons.account_balance, label: "Bank", color: Colors.grey, onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bank module coming soon.")))),
-                            
-                            // REAL BAN BUTTON LOGIC
                             _ActionButton(
                               icon: isBanned ? Icons.restore : Icons.block, 
                               label: isBanned ? "Unban" : "Ban", 
@@ -125,7 +126,6 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  // --- SAFETY PROTOCOL HELPER ---
   Future<void> _safeToggle(BuildContext context, String userName, String action, String userId, String column, bool newValue) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -147,10 +147,31 @@ class DashboardPage extends StatelessWidget {
 
   Future<void> _toggleStatus(BuildContext context, String userId, String column, bool newValue) async {
     try {
+      // DEBUG: Printing the exact command being sent
+      debugPrint("Attempting to update $column to $newValue for user $userId");
+      
       await Supabase.instance.client.from('profiles').update({column: newValue}).eq('id', userId);
-      if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Updated $column successfully.")));
+      
+      if(context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("SUCCESS: Updated $column!"), 
+          backgroundColor: Colors.green
+        ));
+      }
+    } on PostgrestException catch (error) {
+      // 🚨 CATCHING THE REAL DATABASE ERROR
+      debugPrint("SUPABASE ERROR: ${error.message} (Code: ${error.code})");
+      if(context.mounted) {
+        showDialog(context: context, builder: (c) => AlertDialog(
+          title: const Text("DATABASE ERROR"),
+          content: Text("Code: ${error.code}\nMessage: ${error.message}\nDetails: ${error.details}"),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))],
+        ));
+      }
     } catch (e) {
-      if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      // Catch generic Flutter errors
+      debugPrint("GENERIC ERROR: $e");
+      if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     }
   }
 }
