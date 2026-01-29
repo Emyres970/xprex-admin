@@ -35,7 +35,7 @@ class UserDetailScreen extends StatelessWidget {
           final address = user['address'] ?? 'No Address Provided';
           final isVerified = user['is_verified'] ?? false;
           final isPremium = user['is_premium'] ?? false;
-          final isBanned = user['is_banned'] ?? false; // <--- NEW
+          final isBanned = user['is_banned'] ?? false;
           final joinedAt = user['created_at'] ?? 'Unknown Date';
           final avatarUrl = user['avatar_url']; 
           final authUserId = user['auth_user_id'] ?? profileId; 
@@ -45,7 +45,6 @@ class UserDetailScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. HEADER
                 Center(
                   child: Column(
                     children: [
@@ -72,7 +71,6 @@ class UserDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
 
-                // 2. DOCS
                 const Text("VERIFICATION DOCUMENTS", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 FutureBuilder<Map<String, dynamic>?>(
@@ -115,7 +113,6 @@ class UserDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
 
-                // 3. SAFE STATUS CONTROLS
                 const Text("STATUS CONTROLS", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 Container(
@@ -132,7 +129,6 @@ class UserDetailScreen extends StatelessWidget {
 
                 const SizedBox(height: 32),
 
-                // 4. INTEL
                 const Text("INTEL", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 Container(
@@ -153,7 +149,6 @@ class UserDetailScreen extends StatelessWidget {
                 
                 const SizedBox(height: 32),
                 
-                // 5. DANGER ZONE (REAL FUNCTIONALITY)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -174,7 +169,7 @@ class UserDetailScreen extends StatelessWidget {
     );
   }
 
-  // --- SAFETY HELPERS ---
+  // --- HELPERS ---
 
   Future<void> _confirmBanToggle(BuildContext context, String userName, bool isCurrentlyBanned) async {
     final action = isCurrentlyBanned ? "UNBAN" : "BAN";
@@ -197,8 +192,21 @@ class UserDetailScreen extends StatelessWidget {
     );
 
     if (confirmed == true) {
-      await Supabase.instance.client.from('profiles').update({'is_banned': !isCurrentlyBanned}).eq('id', profileId);
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("User $action successful")));
+      // USING VERBOSE ERROR HANDLING HERE TOO
+      try {
+        await Supabase.instance.client.from('profiles').update({'is_banned': !isCurrentlyBanned}).eq('id', profileId);
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("User $action successful")));
+      } on PostgrestException catch (error) {
+        if(context.mounted) {
+          showDialog(context: context, builder: (c) => AlertDialog(
+            title: const Text("DATABASE ERROR"),
+            content: Text("Code: ${error.code}\nMessage: ${error.message}"),
+            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))],
+          ));
+        }
+      } catch (e) {
+        if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
     }
   }
 
@@ -223,8 +231,6 @@ class UserDetailScreen extends StatelessWidget {
       return "${date.year}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')}";
     } catch (_) { return isoString; }
   }
-
-  // --- SAFE WIDGET BUILDERS ---
 
   Widget _buildSafeSwitch(BuildContext context, String label, bool currentValue, IconData icon, Color color, String dbColumn) {
     return Row(
@@ -255,8 +261,19 @@ class UserDetailScreen extends StatelessWidget {
             );
 
             if (confirmed == true) {
-              await Supabase.instance.client.from('profiles').update({dbColumn: newValue}).eq('id', profileId);
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Updated $label")));
+              // VERBOSE ERROR LOGGING FOR SWITCHES
+              try {
+                await Supabase.instance.client.from('profiles').update({dbColumn: newValue}).eq('id', profileId);
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Updated $label")));
+              } on PostgrestException catch (error) {
+                if(context.mounted) {
+                  showDialog(context: context, builder: (c) => AlertDialog(
+                    title: const Text("DATABASE ERROR"),
+                    content: Text("Code: ${error.code}\nMessage: ${error.message}\nHint: ${error.hint}"),
+                    actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))],
+                  ));
+                }
+              }
             }
           },
         ),
