@@ -7,7 +7,7 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // DEBUG: Print YOUR Identity so we can check it against the database
+    // DEBUG: Print YOUR Identity
     final myId = Supabase.instance.client.auth.currentUser?.id;
     debugPrint("👑 I AM LOGGED IN AS: $myId");
 
@@ -90,6 +90,7 @@ class DashboardPage extends StatelessWidget {
                         ),
                         const Divider(color: Colors.white10),
                         
+                        // SAFE QUICK ACTIONS
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
@@ -105,7 +106,18 @@ class DashboardPage extends StatelessWidget {
                               color: Colors.amber, 
                               onTap: () => _safeToggle(context, name, "Grant Premium", userId, 'is_premium', !isPremium)
                             ),
-                            _ActionButton(icon: Icons.account_balance, label: "Bank", color: Colors.grey, onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bank module coming soon.")))),
+                            
+                            // --- CONNECTED BANK BUTTON ---
+                            _ActionButton(
+                              icon: Icons.account_balance, 
+                              label: "Bank", 
+                              color: Colors.grey, 
+                              onTap: () {
+                                final authId = user['auth_user_id'] ?? userId; // Handle missing auth_id
+                                context.push('/bank/$userId/$authId/$name');
+                              }
+                            ),
+                            
                             _ActionButton(
                               icon: isBanned ? Icons.restore : Icons.block, 
                               label: isBanned ? "Unban" : "Ban", 
@@ -147,16 +159,14 @@ class DashboardPage extends StatelessWidget {
 
   Future<void> _toggleStatus(BuildContext context, String userId, String column, bool newValue) async {
     try {
-      // THE FIX: We use .select() to ask Supabase "Did you actually do it?"
       final data = await Supabase.instance.client
           .from('profiles')
           .update({column: newValue})
           .eq('id', userId)
-          .select(); // <--- CRITICAL: This forces the DB to return the updated row
+          .select();
       
-      // THE TRUTH CHECK
       if (data.isEmpty) {
-        throw "ACCESS DENIED (RLS BLOCKED). The database ignored the update because it doesn't recognize you as an Admin.";
+        throw "ACCESS DENIED (RLS BLOCKED). Database ignored the update.";
       }
 
       if(context.mounted) {
@@ -168,7 +178,6 @@ class DashboardPage extends StatelessWidget {
     } catch (e) {
       debugPrint("ERROR: $e");
       if(context.mounted) {
-        // Show the REAL error
         showDialog(context: context, builder: (c) => AlertDialog(
           title: const Text("UPDATE FAILED", style: TextStyle(color: Colors.red)),
           content: Text(e.toString()),
