@@ -7,9 +7,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../auth/login_screen.dart';
 import '../dashboard/roster_screen.dart';
 import '../dashboard/verification_screen.dart';
-import '../dashboard/user_detail_screen.dart'; // <--- NEW IMPORT
+import '../dashboard/user_detail_screen.dart';
+import '../dashboard/bank_detail_screen.dart'; // <--- NEW IMPORT
 
-// LISTENER CLASS (No changes here)
+// LISTENER CLASS
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<AuthState> stream) {
     notifyListeners();
@@ -41,13 +42,22 @@ final appRouter = GoRouter(
       path: '/verification',
       builder: (context, state) => const VerificationScreen(),
     ),
-    // NEW ROUTE: Dynamic User Profile
     GoRoute(
       path: '/user/:id',
       builder: (context, state) {
-        // Extract the ID from the URL parameter
         final id = state.pathParameters['id']!;
         return UserDetailScreen(profileId: id);
+      },
+    ),
+    // NEW ROUTE: FINANCE TERMINAL
+    GoRoute(
+      path: '/bank/:profileId/:authId/:name',
+      builder: (context, state) {
+        return BankDetailScreen(
+          profileId: state.pathParameters['profileId']!,
+          authUserId: state.pathParameters['authId']!,
+          userName: state.pathParameters['name']!,
+        );
       },
     ),
   ],
