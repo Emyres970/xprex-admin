@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class BankDetailScreen extends StatelessWidget {
-  final String profileId; // This is the Profile ID (UUID)
-  final String authUserId; // This is the Auth ID (Needed for bank table)
+  final String profileId; 
+  final String authUserId; 
   final String userName;
 
   const BankDetailScreen({
@@ -16,26 +16,28 @@ class BankDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Stream Wallet Balance (From Profiles)
+    // 1. Stream Wallet Balance
     final walletStream = Supabase.instance.client
         .from('profiles')
         .stream(primaryKey: ['id'])
         .eq('id', profileId)
         .limit(1);
 
-    // 2. Stream Bank Details (From Bank Table)
+    // 2. Stream Bank Details
     final bankStream = Supabase.instance.client
         .from('creator_bank_accounts')
         .stream(primaryKey: ['id'])
-        .eq('user_id', authUserId) // <--- FIXED: 'user_id'
+        .eq('user_id', authUserId) 
         .limit(1);
 
     return Scaffold(
+      backgroundColor: Colors.black, // Ensure background matches theme
       appBar: AppBar(
         title: Text("FINANCE: $userName".toUpperCase()),
         backgroundColor: Colors.black,
+        elevation: 0,
       ),
-      body: Padding(
+      body: SingleChildScrollView( // <--- THE FIX: Allows full scrolling
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,16 +83,19 @@ class BankDetailScreen extends StatelessWidget {
             // --- SECTION 2: BANK COORDINATES ---
             const Text("BANK COORDINATES", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
             const SizedBox(height: 12),
-            Expanded(
-              child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream: bankStream,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: Colors.amber));
-                  }
-                  
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return Center(
+            
+            // Removed 'Expanded' to allow scrolling
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: bankStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.amber));
+                }
+                
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 40),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -99,53 +104,55 @@ class BankDetailScreen extends StatelessWidget {
                           Text("$userName has not linked a bank account.", style: const TextStyle(color: Colors.white54)),
                         ],
                       ),
-                    );
-                  }
-
-                  final bank = snapshot.data!.first;
-                  final bankName = bank['bank_name'] ?? 'Unknown Bank';
-                  final accNumber = bank['account_number'] ?? '0000000000';
-                  final accName = bank['account_name'] ?? 'Unknown Name';
-
-                  return Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E1E1E),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          children: [
-                            _buildBankRow("Bank Name", bankName),
-                            const Divider(color: Colors.white10),
-                            _buildBankRow("Account Name", accName),
-                            const Divider(color: Colors.white10),
-                            _buildBankRow("Account Number", accNumber, isCopyable: true, context: context),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.copy, color: Colors.black),
-                          label: const Text("COPY ACCOUNT NUMBER", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: () {
-                            Clipboard.setData(ClipboardData(text: accNumber));
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Account Number Copied! Ready to Pay.")));
-                          },
-                        ),
-                      ),
-                    ],
+                    ),
                   );
-                },
-              ),
+                }
+
+                final bank = snapshot.data!.first;
+                final bankName = bank['bank_name'] ?? 'Unknown Bank';
+                final accNumber = bank['account_number'] ?? '0000000000';
+                final accName = bank['account_name'] ?? 'Unknown Name';
+
+                return Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E1E),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildBankRow("Bank Name", bankName),
+                          const Divider(color: Colors.white10),
+                          _buildBankRow("Account Name", accName),
+                          const Divider(color: Colors.white10),
+                          _buildBankRow("Account Number", accNumber, isCopyable: true, context: context),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32), // Breathing room
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.copy, color: Colors.black),
+                        label: const Text("COPY ACCOUNT NUMBER", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: accNumber));
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Account Number Copied! Ready to Pay.")));
+                        },
+                      ),
+                    ),
+                    // Extra padding at bottom for easy scrolling
+                    const SizedBox(height: 40),
+                  ],
+                );
+              },
             ),
           ],
         ),
