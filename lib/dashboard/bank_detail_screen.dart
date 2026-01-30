@@ -27,7 +27,7 @@ class BankDetailScreen extends StatelessWidget {
     final bankStream = Supabase.instance.client
         .from('creator_bank_accounts')
         .stream(primaryKey: ['id'])
-        .eq('auth_user_id', authUserId) // Linking via Auth ID
+        .eq('user_id', authUserId) // <--- FIXED: 'user_id'
         .limit(1);
 
     return Scaffold(
