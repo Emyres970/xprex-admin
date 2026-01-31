@@ -21,7 +21,7 @@ class DashboardPage extends StatelessWidget {
         title: const Text("THE ROSTER"),
         backgroundColor: Colors.black,
         actions: [
-          // --- TREASURY BUTTON (NEW) ---
+          // --- TREASURY BUTTON ---
           IconButton(
             icon: const Icon(Icons.monetization_on, color: Colors.amber),
             tooltip: "Open Federal Reserve",
@@ -87,7 +87,7 @@ class DashboardPage extends StatelessWidget {
                           ),
                           title: Row(
                             children: [
-                              Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isBanned ? Colors.red : Colors.white)),
+                              Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                               if (isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, size: 16, color: Colors.blue)),
                               if (isBanned) const Padding(padding: EdgeInsets.only(left: 6), child: Text("(BANNED)", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold))),
                             ],
