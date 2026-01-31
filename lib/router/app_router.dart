@@ -8,7 +8,8 @@ import '../auth/login_screen.dart';
 import '../dashboard/roster_screen.dart';
 import '../dashboard/verification_screen.dart';
 import '../dashboard/user_detail_screen.dart';
-import '../dashboard/bank_detail_screen.dart'; // <--- NEW IMPORT
+import '../dashboard/bank_detail_screen.dart';
+import '../dashboard/treasury_screen.dart';
 
 // LISTENER CLASS
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -49,7 +50,6 @@ final appRouter = GoRouter(
         return UserDetailScreen(profileId: id);
       },
     ),
-    // NEW ROUTE: FINANCE TERMINAL
     GoRoute(
       path: '/bank/:profileId/:authId/:name',
       builder: (context, state) {
@@ -59,6 +59,10 @@ final appRouter = GoRouter(
           userName: state.pathParameters['name']!,
         );
       },
+    ),
+    GoRoute(
+      path: '/treasury',
+      builder: (context, state) => const TreasuryScreen(),
     ),
   ],
   
