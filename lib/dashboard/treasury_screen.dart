@@ -9,7 +9,6 @@ class TreasuryScreen extends StatefulWidget {
 }
 
 class _TreasuryScreenState extends State<TreasuryScreen> {
-  // We use a Future because we are fetching calculated data from the SQL Function
   late Future<Map<String, dynamic>> _treasuryData;
 
   @override
@@ -25,7 +24,6 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
   }
 
   Future<Map<String, dynamic>> _fetchTreasuryStats() async {
-    // Calls the "Treasury Radar" function we just wrote
     return await Supabase.instance.client.rpc('get_treasury_stats');
   }
 
@@ -59,13 +57,15 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
           final subs = data['subscribers'] ?? 0;
           final todaySec = data['today_seconds'] ?? 0;
           final yesterdayRate = data['yesterday_rate'] ?? 0;
+          final yesterdaySec = data['yesterday_seconds'] ?? 0; // NEW
+          final avgRate7d = data['avg_rate_7d'] ?? 0; // NEW
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. THE DAILY CAP (LIQUIDITY)
+                // 1. LIQUIDITY CAP
                 const Text("DAILY LIQUIDITY CAP", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 _buildMetricCard(
@@ -78,7 +78,7 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
 
                 const SizedBox(height: 32),
 
-                // 2. LIVE PULSE
+                // 2. LIVE PULSE (TODAY)
                 const Text("LIVE NETWORK PULSE", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 Row(
@@ -96,10 +96,41 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: _buildMetricCard(
-                        title: "YESTERDAY'S RATE",
-                        value: "₦${yesterdayRate.toStringAsFixed(2)}",
+                        title: "7-DAY AVG RATE",
+                        value: "₦${avgRate7d.toStringAsFixed(2)}",
                         subtitle: "Per Second",
+                        icon: Icons.show_chart,
+                        color: Colors.purpleAccent,
+                        isSmall: true,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 32),
+
+                // 3. YESTERDAY'S LEDGER (NEW SECTION)
+                const Text("YESTERDAY'S CLOSING", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMetricCard(
+                        title: "TOTAL SECONDS",
+                        value: "${_formatCompact(yesterdaySec)}s",
+                        subtitle: "Effective Time (Decayed)",
                         icon: Icons.history,
+                        color: Colors.white54,
+                        isSmall: true,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildMetricCard(
+                        title: "CLOSING RATE",
+                        value: "₦${yesterdayRate.toStringAsFixed(2)}",
+                        subtitle: "Final Value/Sec",
+                        icon: Icons.price_check,
                         color: Colors.amber,
                         isSmall: true,
                       ),
@@ -109,7 +140,7 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
 
                 const SizedBox(height: 48),
 
-                // 3. THE TRIGGER
+                // 4. TRIGGER BUTTON
                 const Text("PAYOUT PROTOCOL", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 SizedBox(
@@ -128,7 +159,7 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
                 const SizedBox(height: 16),
                 const Center(
                   child: Text(
-                    "Calculates earnings for yesterday (00:00 - 23:59).\nIncludes 20% Decay Logic for re-watches.",
+                    "Calculation includes 20% Decay Protocol for re-watches.\nUpdates creator wallets immediately.",
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white30, fontSize: 11),
                   ),
@@ -185,7 +216,6 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
     try {
       showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.red)));
       
-      // Calls your Secure Wrapper (which calls the new Calculate Logic)
       final response = await Supabase.instance.client.rpc('trigger_daily_payout'); 
       
       if (context.mounted) Navigator.pop(context);
@@ -204,7 +234,7 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
             actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK", style: TextStyle(color: Colors.white)))],
           ),
         );
-        _refreshData(); // Refresh the screen to show new stats
+        _refreshData();
       }
     } catch (e) {
       if (context.mounted) {
