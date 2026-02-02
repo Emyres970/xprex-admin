@@ -10,6 +10,7 @@ import '../dashboard/verification_screen.dart';
 import '../dashboard/user_detail_screen.dart';
 import '../dashboard/bank_detail_screen.dart';
 import '../dashboard/treasury_screen.dart';
+import '../dashboard/settlement_screen.dart'; // <--- NEW IMPORT
 
 // LISTENER CLASS
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -63,6 +64,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/treasury',
       builder: (context, state) => const TreasuryScreen(),
+    ),
+    // NEW ROUTE: SETTLEMENT OFFICE
+    GoRoute(
+      path: '/settlement',
+      builder: (context, state) => const SettlementScreen(),
     ),
   ],
   
