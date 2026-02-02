@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart'; // Add intl to pubspec.yaml if missing, or use basic formatting
+// Removed 'intl' import to fix build error
 
 class SettlementScreen extends StatefulWidget {
   const SettlementScreen({super.key});
@@ -62,7 +62,7 @@ class _MonthlyCloseTab extends StatelessWidget {
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL")),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL", style: TextStyle(color: Colors.grey))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("EXECUTE", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
         ],
       ),
@@ -82,9 +82,10 @@ class _MonthlyCloseTab extends StatelessWidget {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text("BOOKS CLOSED"),
-            content: Text(res.toString()),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK"))],
+            backgroundColor: const Color(0xFF1E1E1E),
+            title: const Text("BOOKS CLOSED", style: TextStyle(color: Colors.green)),
+            content: Text(res.toString(), style: const TextStyle(color: Colors.white70)),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK", style: TextStyle(color: Colors.white)))],
           ),
         );
       }
@@ -97,7 +98,8 @@ class _MonthlyCloseTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lastMonth = DateTime.now().subtract(const Duration(days: 30));
-    final monthName = "${lastMonth.year}-${lastMonth.month.toString().padLeft(2,'0')}";
+    // CUSTOM FORMATTER: No external package needed
+    final monthName = _formatMonthYear(lastMonth);
 
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -130,6 +132,15 @@ class _MonthlyCloseTab extends StatelessWidget {
       ),
     );
   }
+
+  // Simple helper to avoid 'intl' package dependency
+  String _formatMonthYear(DateTime date) {
+    const months = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    ];
+    return "${months[date.month - 1]} ${date.year}";
+  }
 }
 
 // --- TAB 2: MARK AS PAID ---
@@ -161,11 +172,18 @@ class _DisbursementTab extends StatelessWidget {
           itemBuilder: (context, index) {
             final item = items[index];
             final amount = item['amount'];
-            final date = item['period'];
+            final dateStr = item['period'];
             final payoutId = item['id'];
-            // In a real app, you'd join with profiles to get the name, 
-            // but for MVP we might just show User ID or fetch name separately.
             final userId = item['user_id'];
+            
+            // Format date safely
+            String displayDate = dateStr.toString();
+            try {
+              final date = DateTime.parse(dateStr.toString());
+              // Use the same helper function
+              const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+              displayDate = "${months[date.month - 1]} ${date.year}";
+            } catch (_) {}
 
             return Card(
               color: const Color(0xFF1E1E1E),
@@ -173,7 +191,7 @@ class _DisbursementTab extends StatelessWidget {
               child: ListTile(
                 leading: const Icon(Icons.pending, color: Colors.orange),
                 title: Text("₦$amount", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Text("User: $userId\nPeriod: $date", style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                subtitle: Text("User: $userId\nPeriod: $displayDate", style: const TextStyle(color: Colors.grey, fontSize: 10)),
                 trailing: IconButton(
                   icon: const Icon(Icons.check_circle, color: Colors.green),
                   tooltip: "Mark as Paid",
@@ -192,10 +210,10 @@ class _DisbursementTab extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: Text("CONFIRM PAYMENT?", style: const TextStyle(color: Colors.white)),
+        title: const Text("CONFIRM PAYMENT?", style: TextStyle(color: Colors.white)),
         content: Text("Mark ₦$amount as SENT to the user's bank?", style: const TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL")),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL", style: TextStyle(color: Colors.grey))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("CONFIRM", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
         ],
       ),
