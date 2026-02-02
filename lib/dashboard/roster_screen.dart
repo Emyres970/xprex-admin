@@ -21,11 +21,18 @@ class DashboardPage extends StatelessWidget {
         title: const Text("THE ROSTER"),
         backgroundColor: Colors.black,
         actions: [
-          // --- TREASURY BUTTON ---
+          // --- TREASURY BUTTON (DAILY) ---
           IconButton(
             icon: const Icon(Icons.monetization_on, color: Colors.amber),
             tooltip: "Open Federal Reserve",
             onPressed: () => context.push('/treasury'),
+          ),
+          
+          // --- SETTLEMENT BUTTON (MONTHLY) ---
+          IconButton(
+            icon: const Icon(Icons.account_balance_wallet, color: Colors.cyanAccent),
+            tooltip: "Settlement Office",
+            onPressed: () => context.push('/settlement'),
           ),
           
           StreamBuilder<List<Map<String, dynamic>>>(
@@ -87,7 +94,7 @@ class DashboardPage extends StatelessWidget {
                           ),
                           title: Row(
                             children: [
-                              Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                              Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isBanned ? Colors.red : Colors.white)),
                               if (isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, size: 16, color: Colors.blue)),
                               if (isBanned) const Padding(padding: EdgeInsets.only(left: 6), child: Text("(BANNED)", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold))),
                             ],
