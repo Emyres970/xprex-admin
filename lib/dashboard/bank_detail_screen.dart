@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class BankDetailScreen extends StatelessWidget {
   final String profileId; 
-  final String authUserId; 
+  final String authUserId; // The Key to the Bank/Payout Tables
   final String userName;
 
   const BankDetailScreen({
@@ -16,34 +16,42 @@ class BankDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Stream Wallet Balance
+    // 1. Stream Wallet Balance (From Profiles - Current Unpaid)
     final walletStream = Supabase.instance.client
         .from('profiles')
         .stream(primaryKey: ['id'])
         .eq('id', profileId)
         .limit(1);
 
-    // 2. Stream Bank Details
+    // 2. Stream Bank Details (From Bank Table)
     final bankStream = Supabase.instance.client
         .from('creator_bank_accounts')
         .stream(primaryKey: ['id'])
         .eq('user_id', authUserId) 
         .limit(1);
 
+    // 3. Stream Payout History (From Payouts - Settled/Old Data)
+    final payoutStream = Supabase.instance.client
+        .from('payouts')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', authUserId)
+        .order('period', ascending: false);
+
     return Scaffold(
-      backgroundColor: Colors.black, // Ensure background matches theme
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: Text("FINANCE: $userName".toUpperCase()),
         backgroundColor: Colors.black,
         elevation: 0,
       ),
-      body: SingleChildScrollView( // <--- THE FIX: Allows full scrolling
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- SECTION 1: THE WALLET ---
-            const Text("CURRENT WALLET BALANCE", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
+            // --- SECTION 1: THE ACTIVE WALLET ---
+            // This represents NEW money (Post-Settlement)
+            const Text("ACTIVE WALLET (CURRENT CYCLE)", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
@@ -57,9 +65,8 @@ class BankDetailScreen extends StatelessWidget {
                 stream: walletStream,
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
-                  if (snapshot.data!.isEmpty) return const Text("₦0.00", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white));
-
-                  final data = snapshot.data!.first;
+                  
+                  final data = snapshot.data!.isNotEmpty ? snapshot.data!.first : {};
                   final balance = data['earnings_balance'] ?? 0;
                   
                   return Column(
@@ -67,93 +74,112 @@ class BankDetailScreen extends StatelessWidget {
                       const Icon(Icons.account_balance_wallet, color: Colors.green, size: 32),
                       const SizedBox(height: 8),
                       Text(
-                        "₦${balance.toString()}", 
+                        "₦${_formatMoney(balance)}", 
                         style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white)
                       ),
                       const SizedBox(height: 8),
-                      const Text("PAYABLE AMOUNT", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                      const Text("UNPAID EARNINGS", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
                     ],
                   );
                 },
               ),
             ),
 
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
 
             // --- SECTION 2: BANK COORDINATES ---
-            const Text("BANK COORDINATES", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
+            const Text("BANK DESTINATION", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
             const SizedBox(height: 12),
-            
-            // Removed 'Expanded' to allow scrolling
             StreamBuilder<List<Map<String, dynamic>>>(
               stream: bankStream,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Colors.amber));
-                }
-                
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 40),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.no_accounts, size: 48, color: Colors.grey),
-                          const SizedBox(height: 16),
-                          Text("$userName has not linked a bank account.", style: const TextStyle(color: Colors.white54)),
-                        ],
-                      ),
-                    ),
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    width: double.infinity,
+                    decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
+                    child: const Column(children: [
+                      Icon(Icons.no_accounts, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text("No Bank Linked", style: TextStyle(color: Colors.grey))
+                    ]),
                   );
                 }
 
                 final bank = snapshot.data!.first;
-                final bankName = bank['bank_name'] ?? 'Unknown Bank';
-                final accNumber = bank['account_number'] ?? '0000000000';
-                final accName = bank['account_name'] ?? 'Unknown Name';
-
-                return Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E1E1E),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildBankRow("Bank Name", bankName),
-                          const Divider(color: Colors.white10),
-                          _buildBankRow("Account Name", accName),
-                          const Divider(color: Colors.white10),
-                          _buildBankRow("Account Number", accNumber, isCopyable: true, context: context),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 32), // Breathing room
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.copy, color: Colors.black),
-                        label: const Text("COPY ACCOUNT NUMBER", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.amber,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: accNumber));
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Account Number Copied! Ready to Pay.")));
-                        },
-                      ),
-                    ),
-                    // Extra padding at bottom for easy scrolling
-                    const SizedBox(height: 40),
-                  ],
+                return Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildBankRow("Bank Name", bank['bank_name'] ?? 'Unknown'),
+                      const Divider(color: Colors.white10),
+                      _buildBankRow("Account Name", bank['account_name'] ?? 'Unknown'),
+                      const Divider(color: Colors.white10),
+                      _buildBankRow("Account Number", bank['account_number'] ?? '000', isCopyable: true, context: context),
+                    ],
+                  ),
                 );
               },
             ),
+
+            const SizedBox(height: 32),
+
+            // --- SECTION 3: STATEMENT HISTORY (THE ARCHIVE) ---
+            // This answers "Where did last month's money go?"
+            const Text("STATEMENT HISTORY", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
+            const SizedBox(height: 12),
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: payoutStream,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: LinearProgressIndicator(color: Colors.amber));
+                
+                final payouts = snapshot.data!;
+                if (payouts.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 8.0),
+                    child: Text("No payout history found.", style: TextStyle(color: Colors.white30, fontStyle: FontStyle.italic)),
+                  );
+                }
+
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: payouts.length,
+                  itemBuilder: (context, index) {
+                    final item = payouts[index];
+                    final amount = item['amount'] ?? 0;
+                    final status = item['status'] ?? 'Pending';
+                    final dateStr = item['period'];
+                    final dateLabel = _formatDate(dateStr.toString());
+                    final isPaid = status == 'Paid';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E1E),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border(left: BorderSide(color: isPaid ? Colors.green : Colors.amber, width: 4)),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                        title: Text(dateLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: Text(status.toUpperCase(), style: TextStyle(color: isPaid ? Colors.green : Colors.amber, fontSize: 10)),
+                        trailing: Text(
+                          "₦${_formatMoney(amount)}",
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+            
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -170,14 +196,34 @@ class BankDetailScreen extends StatelessWidget {
           Row(
             children: [
               Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-              if (isCopyable) ...[
+              if (isCopyable && context != null) ...[
                 const SizedBox(width: 8),
-                const Icon(Icons.copy, size: 14, color: Colors.amber),
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: value));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied!")));
+                  },
+                  child: const Icon(Icons.copy, size: 14, color: Colors.amber),
+                ),
               ]
             ],
           ),
         ],
       ),
     );
+  }
+
+  String _formatMoney(num amount) {
+    return amount.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+  }
+
+  String _formatDate(String isoString) {
+    try {
+      final date = DateTime.parse(isoString);
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return "${months[date.month - 1]} ${date.year}";
+    } catch (_) {
+      return isoString;
+    }
   }
 }
