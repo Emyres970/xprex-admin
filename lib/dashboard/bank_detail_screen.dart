@@ -16,14 +16,21 @@ class BankDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Current Wallet (Live from Profile table)
+    // Current Wallet
     final walletStream = Supabase.instance.client
         .from('profiles')
         .stream(primaryKey: ['id'])
         .eq('id', profileId)
         .limit(1);
 
-    // Historical Payouts (The Archive)
+    // Bank Details
+    final bankStream = Supabase.instance.client
+        .from('creator_bank_accounts')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', authUserId) 
+        .limit(1);
+
+    // Historical Payouts
     final historyStream = Supabase.instance.client
         .from('payouts')
         .stream(primaryKey: ['id'])
@@ -45,7 +52,7 @@ class BankDetailScreen extends StatelessWidget {
             const Text("AVAILABLE BALANCE", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
             const SizedBox(height: 12),
             
-            // --- LIVE WALLET CARD ---
+            // --- ACTIVE WALLET ---
             StreamBuilder<List<Map<String, dynamic>>>(
               stream: walletStream,
               builder: (context, snapshot) {
@@ -73,7 +80,73 @@ class BankDetailScreen extends StatelessWidget {
 
             const SizedBox(height: 40),
 
-            const Text("PAYOUT HISTORY", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
+            // --- BANK DETAILS ---
+            const Text("BANK DESTINATION", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
+            const SizedBox(height: 12),
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: bankStream,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    width: double.infinity,
+                    decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
+                    child: const Column(children: [
+                      Icon(Icons.no_accounts, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text("No Bank Linked", style: TextStyle(color: Colors.grey))
+                    ]),
+                  );
+                }
+
+                final bank = snapshot.data!.first;
+                final accNumber = bank['account_number'] ?? '000';
+
+                return Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E1E),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildBankRow("Bank Name", bank['bank_name'] ?? 'Unknown'),
+                          const Divider(color: Colors.white10),
+                          _buildBankRow("Account Name", bank['account_name'] ?? 'Unknown'),
+                          const Divider(color: Colors.white10),
+                          // Just text here, button is below
+                          _buildBankRow("Account Number", accNumber),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // THE BIG BUTTON IS BACK
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.copy, color: Colors.black),
+                        label: const Text("COPY ACCOUNT NUMBER", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: accNumber));
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Account Number Copied!")));
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+            const SizedBox(height: 40),
+
+            const Text("STATEMENT HISTORY", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
             const SizedBox(height: 12),
 
             // --- PAYOUT LEDGER ---
@@ -94,31 +167,57 @@ class BankDetailScreen extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final payout = payouts[index];
                     final isPaid = payout['status'] == 'Paid';
+                    final dateLabel = _formatDate(payout['period'].toString());
                     
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E1E),
                         borderRadius: BorderRadius.circular(12),
+                        border: Border(left: BorderSide(color: isPaid ? Colors.green : Colors.amber, width: 4)),
                       ),
                       child: ListTile(
-                        leading: Icon(isPaid ? Icons.check_circle : Icons.pending, color: isPaid ? Colors.green : Colors.orange),
+                        leading: Icon(isPaid ? Icons.check_circle : Icons.pending, color: isPaid ? Colors.green : Colors.amber),
                         title: Text("₦${_formatMoney(payout['amount'])}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        subtitle: Text(payout['period'].toString(), style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                        trailing: Text(isPaid ? "PAID" : "PROCESSING", style: TextStyle(color: isPaid ? Colors.green : Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
+                        subtitle: Text(dateLabel, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                        trailing: Text(isPaid ? "PAID" : "PROCESSING", style: TextStyle(color: isPaid ? Colors.green : Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
                     );
                   },
                 );
               },
             ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildBankRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+
   String _formatMoney(num amount) {
     return amount.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+  }
+
+  String _formatDate(String isoString) {
+    try {
+      final date = DateTime.parse(isoString);
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return "${months[date.month - 1]} ${date.year}";
+    } catch (_) {
+      return isoString;
+    }
   }
 }
