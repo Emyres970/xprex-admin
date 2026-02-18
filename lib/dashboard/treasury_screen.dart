@@ -213,35 +213,85 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
   }
 
   Future<void> _runEngine(BuildContext context) async {
-    try {
-      showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.red)));
-      
-      final response = await Supabase.instance.client.rpc('trigger_daily_payout'); 
-      
-      if (context.mounted) Navigator.pop(context);
+    // 1. Show Loading Indicator
+    showDialog(
+      context: context, 
+      barrierDismissible: false, 
+      builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.red))
+    );
 
-      final data = response; 
+    try {
+      // 2. Call the New SQL Engine
+      // We use 'calculate_daily_earnings' instead of 'trigger_daily_payout'
+      final response = await Supabase.instance.client.rpc('calculate_daily_earnings'); 
+      
+      if (context.mounted) Navigator.pop(context); // Close Loading
+
+      // 3. Parse the Receipt
+      final data = response as Map<String, dynamic>;
+      final int count = data['payout_count'] ?? 0;
+      final double total = (data['total_paid'] ?? 0).toDouble();
+      
+      // Format money (e.g. 12,500.00)
+      final formattedTotal = total.toStringAsFixed(2).replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
+        (Match m) => '${m[1]},'
+      );
+
+      // 4. Show the "Command Center" Report
       if (context.mounted) {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
             backgroundColor: const Color(0xFF1E1E1E),
-            title: const Text("PAYOUT REPORT", style: TextStyle(color: Colors.green)),
-            content: Text(
-              "Status: ${data['status']}\nLiquidity: ₦${data['liquidity']}\nEffective Secs: ${data['effective_seconds']}\nRate: ₦${data['rate']}", 
-              style: const TextStyle(color: Colors.white70)
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 10),
+                const Text("PAYOUT COMPLETE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ],
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK", style: TextStyle(color: Colors.white)))],
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Funds successfully distributed.", style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 16),
+                _buildSummaryRow("Creators Paid:", "$count", Colors.white),
+                const SizedBox(height: 8),
+                _buildSummaryRow("Total Amount:", "₦$formattedTotal", Colors.greenAccent),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx), 
+                child: const Text("EXCELLENT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+              )
+            ],
           ),
         );
-        _refreshData();
+        _refreshData(); // Update the charts instantly
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+        Navigator.pop(context); // Close loading if error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)
+        );
       }
     }
+  }
+
+  // Helper widget for the dialog
+  Widget _buildSummaryRow(String label, String value, Color valueColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white70)),
+        Text(value, style: TextStyle(color: valueColor, fontWeight: FontWeight.bold, fontSize: 16)),
+      ],
+    );
   }
 
   String _formatMoney(num amount) {
