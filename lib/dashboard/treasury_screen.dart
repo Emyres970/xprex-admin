@@ -27,6 +27,67 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
     return await Supabase.instance.client.rpc('get_treasury_stats');
   }
 
+  // --- MANUAL STORAGE SWEEPER ---
+  Future<void> _purgeTempVideos() async {
+    // 1. Show Loading Indicator
+    showDialog(
+      context: context, 
+      barrierDismissible: false, 
+      builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.red))
+    );
+
+    try {
+      int deletedCount = 0;
+      final storage = Supabase.instance.client.storage.from('raw_uploads');
+      
+      // 2. Fetch the list of FOLDERS at the root of the bucket
+      final folders = await storage.list();
+
+      for (final folder in folders) {
+        // Skip placeholder or hidden files at root
+        if (folder.name == '.emptyFolderPlaceholder' || folder.id == null) continue;
+
+        // 3. Fetch the files INSIDE each folder
+        final files = await storage.list(path: folder.name);
+        List<String> filesToDelete = [];
+
+        for (final file in files) {
+          if (file.name == '.emptyFolderPlaceholder') continue;
+          // Construct the exact path: "folderName/fileName.mp4"
+          filesToDelete.add('${folder.name}/${file.name}');
+        }
+
+        // 4. Bulk delete files for this folder if any exist
+        if (filesToDelete.isNotEmpty) {
+          await storage.remove(filesToDelete);
+          deletedCount += filesToDelete.length;
+        }
+      }
+
+      // 5. Success UI
+      if (mounted) {
+        Navigator.pop(context); // Close Loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("✅ Deleted $deletedCount temporary files"), 
+            backgroundColor: Colors.green,
+          )
+        );
+      }
+    } catch (e) {
+      // 6. Error UI
+      if (mounted) {
+        Navigator.pop(context); // Close Loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("❌ Error purging files: $e"), 
+            backgroundColor: Colors.red,
+          )
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,8 +118,8 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
           final subs = data['subscribers'] ?? 0;
           final todaySec = data['today_seconds'] ?? 0;
           final yesterdayRate = data['yesterday_rate'] ?? 0;
-          final yesterdaySec = data['yesterday_seconds'] ?? 0; // NEW
-          final avgRate7d = data['avg_rate_7d'] ?? 0; // NEW
+          final yesterdaySec = data['yesterday_seconds'] ?? 0; 
+          final avgRate7d = data['avg_rate_7d'] ?? 0; 
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -109,7 +170,7 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
 
                 const SizedBox(height: 32),
 
-                // 3. YESTERDAY'S LEDGER (NEW SECTION)
+                // 3. YESTERDAY'S LEDGER
                 const Text("YESTERDAY'S CLOSING", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
                 const SizedBox(height: 12),
                 Row(
@@ -164,6 +225,34 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
                     style: TextStyle(color: Colors.white30, fontSize: 11),
                   ),
                 ),
+                
+                const SizedBox(height: 48),
+
+                // 5. STORAGE MAINTENANCE
+                const Text("STORAGE MAINTENANCE", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.delete_sweep, color: Colors.white),
+                    label: const Text("PURGE TEMP VIDEOS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange.shade900,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => _confirmPurge(context),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Center(
+                  child: Text(
+                    "Manually clears the raw_uploads bucket.\nUse this fallback if the automated cron job fails.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white30, fontSize: 11),
+                  ),
+                ),
+                const SizedBox(height: 24),
               ],
             ),
           );
@@ -212,8 +301,26 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
     }
   }
 
+  Future<void> _confirmPurge(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text("PURGE TEMP VIDEOS?", style: TextStyle(color: Colors.white)),
+        content: const Text("This will permanently delete all raw files in the temporary upload bucket. Proceed?", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("PURGE", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if(context.mounted) _purgeTempVideos();
+    }
+  }
+
   Future<void> _runEngine(BuildContext context) async {
-    // 1. Show Loading Indicator
     showDialog(
       context: context, 
       barrierDismissible: false, 
@@ -221,24 +328,19 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
     );
 
     try {
-      // 2. Call the New SQL Engine
-      // We use 'calculate_daily_earnings' instead of 'trigger_daily_payout'
       final response = await Supabase.instance.client.rpc('calculate_daily_earnings'); 
       
       if (context.mounted) Navigator.pop(context); // Close Loading
 
-      // 3. Parse the Receipt
       final data = response as Map<String, dynamic>;
       final int count = data['payout_count'] ?? 0;
       final double total = (data['total_paid'] ?? 0).toDouble();
       
-      // Format money (e.g. 12,500.00)
       final formattedTotal = total.toStringAsFixed(2).replaceAllMapped(
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
         (Match m) => '${m[1]},'
       );
 
-      // 4. Show the "Command Center" Report
       if (context.mounted) {
         showDialog(
           context: context,
@@ -271,11 +373,11 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
             ],
           ),
         );
-        _refreshData(); // Update the charts instantly
+        _refreshData(); 
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context); // Close loading if error
+        Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)
         );
@@ -283,7 +385,6 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
     }
   }
 
-  // Helper widget for the dialog
   Widget _buildSummaryRow(String label, String value, Color valueColor) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
