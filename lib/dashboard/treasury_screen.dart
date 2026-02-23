@@ -27,9 +27,34 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
     return await Supabase.instance.client.rpc('get_treasury_stats');
   }
 
+  // --- RECURSIVE STORAGE SWEEPER HELPER ---
+  Future<List<String>> _getFilesRecursively(String bucket, String path) async {
+    List<String> filePaths = [];
+    final storage = Supabase.instance.client.storage.from(bucket);
+    
+    // Fetch items in the current path with a high limit
+    final items = await storage.list(path: path, searchOptions: const SearchOptions(limit: 1000));
+
+    for (final item in items) {
+      if (item.name == '.emptyFolderPlaceholder') continue;
+      
+      final currentItemPath = path.isEmpty ? item.name : '$path/${item.name}';
+
+      // Supabase storage.list() returns items without an ID if they are folders
+      if (item.id == null) {
+        // It's a folder: recursively search inside it
+        final nestedFiles = await _getFilesRecursively(bucket, currentItemPath);
+        filePaths.addAll(nestedFiles);
+      } else {
+        // It's a file: add its exact path to the kill list
+        filePaths.add(currentItemPath);
+      }
+    }
+    return filePaths;
+  }
+
   // --- MANUAL STORAGE SWEEPER ---
   Future<void> _purgeTempVideos() async {
-    // 1. Show Loading Indicator
     showDialog(
       context: context, 
       barrierDismissible: false, 
@@ -37,45 +62,37 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
     );
 
     try {
-      int deletedCount = 0;
-      final storage = Supabase.instance.client.storage.from('raw_uploads');
+      final bucketName = 'raw_uploads';
       
-      // 2. Fetch the list of FOLDERS at the root of the bucket
-      final folders = await storage.list();
+      // 1. Recursively find every single file in the bucket
+      final filesToDelete = await _getFilesRecursively(bucketName, '');
 
-      for (final folder in folders) {
-        // Skip placeholder or hidden files at root
-        if (folder.name == '.emptyFolderPlaceholder' || folder.id == null) continue;
-
-        // 3. Fetch the files INSIDE each folder
-        final files = await storage.list(path: folder.name);
-        List<String> filesToDelete = [];
-
-        for (final file in files) {
-          if (file.name == '.emptyFolderPlaceholder') continue;
-          // Construct the exact path: "folderName/fileName.mp4"
-          filesToDelete.add('${folder.name}/${file.name}');
-        }
-
-        // 4. Bulk delete files for this folder if any exist
-        if (filesToDelete.isNotEmpty) {
-          await storage.remove(filesToDelete);
-          deletedCount += filesToDelete.length;
+      // 2. Safely bulk delete the files in chunks to avoid API timeouts
+      if (filesToDelete.isNotEmpty) {
+        final storage = Supabase.instance.client.storage.from(bucketName);
+        const chunkSize = 100;
+        
+        for (var i = 0; i < filesToDelete.length; i += chunkSize) {
+          final chunk = filesToDelete.sublist(
+            i, 
+            i + chunkSize > filesToDelete.length ? filesToDelete.length : i + chunkSize
+          );
+          await storage.remove(chunk);
         }
       }
 
-      // 5. Success UI
+      // 3. Success UI
       if (mounted) {
         Navigator.pop(context); // Close Loading
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("✅ Deleted $deletedCount temporary files"), 
+            content: Text("✅ Deleted ${filesToDelete.length} temporary files"), 
             backgroundColor: Colors.green,
           )
         );
       }
     } catch (e) {
-      // 6. Error UI
+      // 4. Error UI
       if (mounted) {
         Navigator.pop(context); // Close Loading
         ScaffoldMessenger.of(context).showSnackBar(
