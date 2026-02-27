@@ -65,10 +65,34 @@ class UserDetailScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Text(name, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isBanned ? Colors.red : Colors.white)),
-                      if (isBanned) const Text("🚫 CURRENTLY BANNED", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      Text("@$username", style: const TextStyle(color: Colors.amber, fontSize: 16)),
-                      Text(email, style: const TextStyle(color: Colors.grey)),
+                      
+                      if (isBanned) 
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 8.0),
+                          child: Text("🚫 CURRENTLY BANNED", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                        ),
+                        
+                      // Injecting the new Copyable Rows
+                      _buildCopyableRow(
+                        context, 
+                        "Name", 
+                        name, 
+                        textStyle: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isBanned ? Colors.red : Colors.white)
+                      ),
+                      const SizedBox(height: 4),
+                      _buildCopyableRow(
+                        context, 
+                        "Username", 
+                        "@$username", 
+                        textStyle: const TextStyle(color: Colors.amber, fontSize: 16)
+                      ),
+                      const SizedBox(height: 4),
+                      _buildCopyableRow(
+                        context, 
+                        "Email", 
+                        email, 
+                        textStyle: const TextStyle(color: Colors.grey)
+                      ),
                     ],
                   ),
                 ),
@@ -199,7 +223,9 @@ class UserDetailScreen extends StatelessWidget {
     );
 
     if (confirmed == true) {
-      await _executeUpdate(context, 'is_banned', !isCurrentlyBanned);
+      if (context.mounted) {
+         await _executeUpdate(context, 'is_banned', !isCurrentlyBanned);
+      }
     }
   }
 
@@ -259,6 +285,37 @@ class UserDetailScreen extends StatelessWidget {
 
   // --- SAFE WIDGET BUILDERS ---
 
+  // [NEW] Helper for centered, 1-tap copyable text (used in header)
+  Widget _buildCopyableRow(BuildContext context, String label, String value, {TextStyle? textStyle}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: value));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$label copied!'), 
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            )
+          );
+        },
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(value, style: textStyle),
+              const SizedBox(width: 6),
+              Icon(Icons.copy, size: 14, color: Colors.grey.withOpacity(0.5)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSafeSwitch(BuildContext context, String label, bool currentValue, IconData icon, Color color, String dbColumn) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -288,7 +345,9 @@ class UserDetailScreen extends StatelessWidget {
             );
 
             if (confirmed == true) {
-              await _executeUpdate(context, dbColumn, newValue);
+              if (context.mounted) {
+                await _executeUpdate(context, dbColumn, newValue);
+              }
             }
           },
         ),
