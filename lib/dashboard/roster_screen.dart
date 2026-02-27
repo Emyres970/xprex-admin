@@ -2,24 +2,46 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // DEBUG: Print YOUR Identity
-    final myId = Supabase.instance.client.auth.currentUser?.id;
-    debugPrint("👑 I AM LOGGED IN AS: $myId");
+  State<DashboardPage> createState() => _DashboardPageState();
+}
 
-    final usersStream = Supabase.instance.client
+class _DashboardPageState extends State<DashboardPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  
+  late final Stream<List<Map<String, dynamic>>> _usersStream;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize the stream here so it doesn't rebuild on every keystroke
+    _usersStream = Supabase.instance.client
         .from('profiles')
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: false);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    debugPrint("👑 I AM LOGGED IN AS: $myId");
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text("THE ROSTER"),
+        title: const Text("THE ROSTER", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
         backgroundColor: Colors.black,
+        elevation: 0,
         actions: [
           // --- TREASURY BUTTON (DAILY) ---
           IconButton(
@@ -43,7 +65,16 @@ class DashboardPage extends StatelessWidget {
                 alignment: Alignment.center,
                 children: [
                   IconButton(icon: const Icon(Icons.notifications), onPressed: () => context.push('/verification')),
-                  if (count > 0) Positioned(right: 8, top: 8, child: Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle), child: Text(count.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)))),
+                  if (count > 0) 
+                    Positioned(
+                      right: 8, 
+                      top: 8, 
+                      child: Container(
+                        padding: const EdgeInsets.all(4), 
+                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle), 
+                        child: Text(count.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))
+                      )
+                    ),
                 ],
               );
             },
@@ -51,103 +82,220 @@ class DashboardPage extends StatelessWidget {
           IconButton(icon: const Icon(Icons.logout, color: Colors.redAccent), onPressed: () => Supabase.instance.client.auth.signOut()),
         ],
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: usersStream,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.amber));
-          final users = snapshot.data!;
-          if (users.isEmpty) return const Center(child: Text("No soldiers found yet."));
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: users.length,
-            separatorBuilder: (c, i) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final user = users[index];
-              final name = user['full_name'] ?? user['display_name'] ?? user['username'] ?? 'Unknown Agent';
-              final email = user['email'] ?? 'No Email';
-              final isVerified = user['is_verified'] ?? false;
-              final isPremium = user['is_premium'] ?? false;
-              final isBanned = user['is_banned'] ?? false;
-              final userId = user['id']; 
-
-              return Card(
-                elevation: 0,
-                color: const Color(0xFF1E1E1E),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12), 
-                  side: BorderSide(color: isBanned ? Colors.red.withOpacity(0.5) : Colors.white10)
+      body: Column(
+        children: [
+          // --- SLEEK SEARCH BAR ---
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value.toLowerCase();
+                });
+              },
+              decoration: InputDecoration(
+                hintText: 'Search by name, username, or email...',
+                hintStyle: TextStyle(color: Colors.grey.shade600),
+                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFF1A1A1A),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
                 ),
-                child: InkWell(
-                  onTap: () => context.push('/user/$userId'),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      children: [
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(
-                            backgroundColor: isBanned ? Colors.red : (isPremium ? Colors.amber : Colors.grey.withOpacity(0.2)),
-                            foregroundColor: isPremium && !isBanned ? Colors.black : Colors.white,
-                            child: isBanned ? const Icon(Icons.block, color: Colors.white) : Text(name.isNotEmpty ? name[0].toUpperCase() : "?"),
-                          ),
-                          title: Row(
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Colors.white10, width: 1),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Colors.amber, width: 1),
+                ),
+              ),
+            ),
+          ),
+
+          // --- ROSTER LIST ---
+          Expanded(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _usersStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.amber));
+                }
+                
+                if (snapshot.hasError) {
+                  return Center(child: Text("Error loading roster: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
+                }
+
+                final allUsers = snapshot.data ?? [];
+                
+                // CLIENT-SIDE FILTERING LOGIC
+                final users = _searchQuery.isEmpty 
+                    ? allUsers 
+                    : allUsers.where((user) {
+                        final fullName = (user['full_name'] ?? '').toString().toLowerCase();
+                        final displayName = (user['display_name'] ?? '').toString().toLowerCase();
+                        final username = (user['username'] ?? '').toString().toLowerCase();
+                        final email = (user['email'] ?? '').toString().toLowerCase();
+                        
+                        return fullName.contains(_searchQuery) || 
+                               displayName.contains(_searchQuery) || 
+                               username.contains(_searchQuery) || 
+                               email.contains(_searchQuery);
+                      }).toList();
+
+                if (users.isEmpty) {
+                  return Center(
+                    child: Text(
+                      _searchQuery.isEmpty ? "No soldiers found yet." : "No users match your search.",
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+                  itemCount: users.length,
+                  separatorBuilder: (c, i) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final user = users[index];
+                    final name = user['full_name'] ?? user['display_name'] ?? user['username'] ?? 'Unknown Agent';
+                    final email = user['email'] ?? 'No Email';
+                    final isVerified = user['is_verified'] == true;
+                    final isPremium = user['is_premium'] == true;
+                    final isBanned = user['is_banned'] == true;
+                    final userId = user['id']; 
+
+                    // UI POLISH: Premium users get a distinct, luxurious highlight
+                    Color cardColor = const Color(0xFF1E1E1E);
+                    Color borderColor = Colors.white10;
+                    
+                    if (isBanned) {
+                      cardColor = Colors.red.withOpacity(0.05);
+                      borderColor = Colors.red.withOpacity(0.4);
+                    } else if (isPremium) {
+                      cardColor = Colors.amber.withOpacity(0.05);
+                      borderColor = Colors.amber.withOpacity(0.3);
+                    }
+
+                    return Card(
+                      elevation: 0,
+                      color: cardColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16), 
+                        side: BorderSide(color: borderColor, width: 1.5)
+                      ),
+                      child: InkWell(
+                        onTap: () => context.push('/user/$userId'),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14.0),
+                          child: Column(
                             children: [
-                              Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isBanned ? Colors.red : Colors.white)),
-                              if (isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, size: 16, color: Colors.blue)),
-                              if (isBanned) const Padding(padding: EdgeInsets.only(left: 6), child: Text("(BANNED)", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold))),
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: CircleAvatar(
+                                  radius: 24,
+                                  backgroundColor: isBanned ? Colors.red : (isPremium ? Colors.amber : Colors.grey.withOpacity(0.2)),
+                                  foregroundColor: isPremium && !isBanned ? Colors.black : Colors.white,
+                                  child: isBanned ? const Icon(Icons.block, color: Colors.white) : Text(name.isNotEmpty ? name[0].toUpperCase() : "?", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        name, 
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold, 
+                                          fontSize: 16,
+                                          color: isBanned ? Colors.redAccent : Colors.white
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, size: 18, color: Colors.blue)),
+                                    if (isPremium && !isBanned) Padding(
+                                      padding: const EdgeInsets.only(left: 6), 
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(4)),
+                                        child: const Text("ELITE", style: TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                      ),
+                                    ),
+                                    if (isBanned) const Padding(padding: EdgeInsets.only(left: 6), child: Text("(BANNED)", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold))),
+                                  ],
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 4.0),
+                                  child: Text(email, style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
+                                ),
+                                trailing: const Icon(Icons.chevron_right, color: Colors.white30),
+                              ),
+                              const SizedBox(height: 8),
+                              const Divider(color: Colors.white10),
+                              
+                              // SAFE QUICK ACTIONS
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _ActionButton(
+                                    icon: Icons.badge, 
+                                    label: isVerified ? "Verified" : "Verify", 
+                                    color: isVerified ? Colors.blue : Colors.grey, 
+                                    onTap: () => _safeToggle(context, name, "Verify User", userId, 'is_verified', !isVerified)
+                                  ),
+                                  _ActionButton(
+                                    icon: Icons.star, 
+                                    label: "Premium", 
+                                    color: isPremium ? Colors.amber : Colors.grey, 
+                                    onTap: () => _safeToggle(context, name, "Grant Premium", userId, 'is_premium', !isPremium)
+                                  ),
+                                  
+                                  // --- CONNECTED BANK BUTTON ---
+                                  _ActionButton(
+                                    icon: Icons.account_balance, 
+                                    label: "Bank", 
+                                    color: Colors.grey, 
+                                    onTap: () {
+                                      final authId = user['auth_user_id'] ?? userId; // Handle missing auth_id
+                                      context.push('/bank/$userId/$authId/$name');
+                                    }
+                                  ),
+                                  
+                                  _ActionButton(
+                                    icon: isBanned ? Icons.restore : Icons.block, 
+                                    label: isBanned ? "Unban" : "Ban", 
+                                    color: isBanned ? Colors.green : Colors.red.withOpacity(0.8), 
+                                    onTap: () => _safeToggle(context, name, isBanned ? "UNBAN USER?" : "BAN USER?", userId, 'is_banned', !isBanned)
+                                  ),
+                                ],
+                              )
                             ],
                           ),
-                          subtitle: Text(email, style: const TextStyle(color: Colors.white54)),
-                          trailing: const Icon(Icons.chevron_right, color: Colors.grey),
                         ),
-                        const Divider(color: Colors.white10),
-                        
-                        // SAFE QUICK ACTIONS
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _ActionButton(
-                              icon: Icons.badge, 
-                              label: "Verify", 
-                              color: Colors.blue, 
-                              onTap: () => _safeToggle(context, name, "Verify User", userId, 'is_verified', !isVerified)
-                            ),
-                            _ActionButton(
-                              icon: Icons.star, 
-                              label: "Premium", 
-                              color: Colors.amber, 
-                              onTap: () => _safeToggle(context, name, "Grant Premium", userId, 'is_premium', !isPremium)
-                            ),
-                            
-                            // --- CONNECTED BANK BUTTON ---
-                            _ActionButton(
-                              icon: Icons.account_balance, 
-                              label: "Bank", 
-                              color: Colors.grey, 
-                              onTap: () {
-                                final authId = user['auth_user_id'] ?? userId; // Handle missing auth_id
-                                context.push('/bank/$userId/$authId/$name');
-                              }
-                            ),
-                            
-                            _ActionButton(
-                              icon: isBanned ? Icons.restore : Icons.block, 
-                              label: isBanned ? "Unban" : "Ban", 
-                              color: isBanned ? Colors.green : Colors.red, 
-                              onTap: () => _safeToggle(context, name, isBanned ? "UNBAN USER?" : "BAN USER?", userId, 'is_banned', !isBanned)
-                            ),
-                          ],
-                        )
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -167,7 +315,9 @@ class DashboardPage extends StatelessWidget {
     );
 
     if (confirmed == true) {
-      await _toggleStatus(context, userId, column, newValue);
+      if (context.mounted) {
+        await _toggleStatus(context, userId, column, newValue);
+      }
     }
   }
 
@@ -205,11 +355,22 @@ class DashboardPage extends StatelessWidget {
 class _ActionButton extends StatelessWidget {
   final IconData icon; final String label; final Color color; final VoidCallback onTap;
   const _ActionButton({required this.icon, required this.label, required this.color, required this.onTap});
+  
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), child: Column(children: [Icon(icon, color: color, size: 20), const SizedBox(height: 4), Text(label, style: TextStyle(color: color, fontSize: 10))])),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), 
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 22), 
+            const SizedBox(height: 6), 
+            Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold))
+          ]
+        )
+      ),
     );
   }
 }
