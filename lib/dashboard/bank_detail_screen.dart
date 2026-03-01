@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class BankDetailScreen extends StatelessWidget {
+// --- NEW: RECENT EARNINGS PROVIDER ---
+final recentEarningsProvider = FutureProvider.family.autoDispose<List<Map<String, dynamic>>, String>((ref, userId) async {
+  final response = await Supabase.instance.client
+      .from('daily_creator_earnings')
+      .select('date, amount_earned')
+      .eq('user_id', userId)
+      .order('date', ascending: false)
+      .limit(2);
+      
+  return List<Map<String, dynamic>>.from(response);
+});
+
+class BankDetailScreen extends ConsumerWidget {
   final String profileId; 
   final String authUserId; 
   final String userName;
@@ -15,7 +28,7 @@ class BankDetailScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Current Wallet
     final walletStream = Supabase.instance.client
         .from('profiles')
@@ -36,6 +49,9 @@ class BankDetailScreen extends StatelessWidget {
         .stream(primaryKey: ['id'])
         .eq('user_id', authUserId)
         .order('period', ascending: false);
+
+    // --- FETCH NEW EARNINGS DATA ---
+    final recentEarningsAsync = ref.watch(recentEarningsProvider(authUserId));
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -72,6 +88,54 @@ class BankDetailScreen extends StatelessWidget {
                     children: [
                       Text("₦${_formatMoney(balance)}", style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Colors.white)),
                       const Text("CURRENT UNSETTLED EARNINGS", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 40),
+
+            // --- RECENT DAILY EARNINGS (NEW INTEL CARD) ---
+            const Text("RECENT DAILY EARNINGS", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
+            const SizedBox(height: 12),
+            recentEarningsAsync.when(
+              loading: () => Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.blue.withOpacity(0.1)),
+                ),
+                child: const Center(child: CircularProgressIndicator(color: Colors.blue)),
+              ),
+              error: (err, stack) => Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: const Text("Failed to load recent earnings.", style: TextStyle(color: Colors.red)),
+              ),
+              data: (items) {
+                final num yesterday = items.isNotEmpty ? (items[0]['amount_earned'] ?? 0) : 0;
+                final num previousDay = items.length > 1 ? (items[1]['amount_earned'] ?? 0) : 0;
+
+                return Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildBankRow("Yesterday's Earnings", "₦${_formatMoney(yesterday)}"),
+                      const Divider(color: Colors.white10),
+                      _buildBankRow("Previous Day's Earnings", "₦${_formatMoney(previousDay)}"),
                     ],
                   ),
                 );
