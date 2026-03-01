@@ -338,7 +338,8 @@ class _DashboardPageState extends State<DashboardPage> {
                                     color: Colors.grey, 
                                     onTap: () {
                                       final authId = user['auth_user_id'] ?? userId; // Handle missing auth_id
-                                      context.push('/bank/$userId/$authId/$name');
+                                      final safeName = Uri.encodeComponent(name); 
+                                      context.push('/bank/$userId/$authId/$safeName');
                                     }
                                   ),
                                   
