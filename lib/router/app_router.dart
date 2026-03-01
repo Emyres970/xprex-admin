@@ -54,10 +54,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/bank/:profileId/:authId/:name',
       builder: (context, state) {
+        final decodedName = Uri.decodeComponent(state.pathParameters['name'] ?? 'Agent');
         return BankDetailScreen(
           profileId: state.pathParameters['profileId']!,
           authUserId: state.pathParameters['authId']!,
-          userName: state.pathParameters['name']!,
+          userName: decodedName,
         );
       },
     ),
