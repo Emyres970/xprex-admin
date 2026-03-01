@@ -15,7 +15,7 @@ final recentEarningsProvider = FutureProvider.family.autoDispose<List<Map<String
   return List<Map<String, dynamic>>.from(response);
 });
 
-class BankDetailScreen extends ConsumerWidget {
+class BankDetailScreen extends ConsumerStatefulWidget {
   final String profileId; 
   final String authUserId; 
   final String userName;
@@ -28,35 +28,51 @@ class BankDetailScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BankDetailScreen> createState() => _BankDetailScreenState();
+}
+
+class _BankDetailScreenState extends ConsumerState<BankDetailScreen> {
+  // --- DECLARE STREAMS IN STATE ---
+  late final Stream<List<Map<String, dynamic>>> walletStream;
+  late final Stream<List<Map<String, dynamic>>> bankStream;
+  late final Stream<List<Map<String, dynamic>>> historyStream;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // --- INITIALIZE ONCE TO PREVENT INFINITE REBUILD CRASH ---
     // Current Wallet
-    final walletStream = Supabase.instance.client
+    walletStream = Supabase.instance.client
         .from('profiles')
         .stream(primaryKey: ['id'])
-        .eq('id', profileId)
+        .eq('id', widget.profileId)
         .limit(1);
 
     // Bank Details
-    final bankStream = Supabase.instance.client
+    bankStream = Supabase.instance.client
         .from('creator_bank_accounts')
         .stream(primaryKey: ['id'])
-        .eq('user_id', authUserId) 
+        .eq('user_id', widget.authUserId) 
         .limit(1);
 
     // Historical Payouts
-    final historyStream = Supabase.instance.client
+    historyStream = Supabase.instance.client
         .from('payouts')
         .stream(primaryKey: ['id'])
-        .eq('user_id', authUserId)
+        .eq('user_id', widget.authUserId)
         .order('period', ascending: false);
+  }
 
+  @override
+  Widget build(BuildContext context) {
     // --- FETCH NEW EARNINGS DATA ---
-    final recentEarningsAsync = ref.watch(recentEarningsProvider(authUserId));
+    final recentEarningsAsync = ref.watch(recentEarningsProvider(widget.authUserId));
 
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("FINANCE: $userName".toUpperCase()),
+        title: Text("FINANCE: ${widget.userName}".toUpperCase()),
         backgroundColor: Colors.black,
         elevation: 0,
       ),
@@ -72,6 +88,9 @@ class BankDetailScreen extends ConsumerWidget {
             StreamBuilder<List<Map<String, dynamic>>>(
               stream: walletStream,
               builder: (context, snapshot) {
+                // Error Boundary
+                if (snapshot.hasError) return const Text('Error loading data', style: TextStyle(color: Colors.red));
+
                 final balance = (snapshot.hasData && snapshot.data!.isNotEmpty) 
                   ? snapshot.data!.first['earnings_balance'] ?? 0.0 
                   : 0.0;
@@ -150,6 +169,9 @@ class BankDetailScreen extends ConsumerWidget {
             StreamBuilder<List<Map<String, dynamic>>>(
               stream: bankStream,
               builder: (context, snapshot) {
+                // Error Boundary
+                if (snapshot.hasError) return const Text('Error loading data', style: TextStyle(color: Colors.red));
+
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return Container(
                     padding: const EdgeInsets.all(16),
@@ -217,6 +239,9 @@ class BankDetailScreen extends ConsumerWidget {
             StreamBuilder<List<Map<String, dynamic>>>(
               stream: historyStream,
               builder: (context, snapshot) {
+                // Error Boundary
+                if (snapshot.hasError) return const Text('Error loading data', style: TextStyle(color: Colors.red));
+
                 if (!snapshot.hasData) return const LinearProgressIndicator(color: Colors.amber);
                 final payouts = snapshot.data!;
                 
