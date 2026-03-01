@@ -13,6 +13,9 @@ class _DashboardPageState extends State<DashboardPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   
+  // --- [NEW] STATE FOR STATUS FILTER ---
+  String _currentFilter = 'All'; // Options: 'All', 'Premium', 'Verified', 'Free', 'Banned'
+  
   late final Stream<List<Map<String, dynamic>>> _usersStream;
 
   @override
@@ -29,6 +32,34 @@ class _DashboardPageState extends State<DashboardPage> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // --- [NEW] HELPER FOR FILTER CHIPS ---
+  Widget _buildFilterChip(String label, Color activeColor) {
+    final isSelected = _currentFilter == label;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: FilterChip(
+        label: Text(label, style: TextStyle(
+          color: isSelected ? Colors.black : Colors.white70, 
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          fontSize: 12
+        )),
+        selected: isSelected,
+        onSelected: (bool selected) {
+          setState(() {
+            _currentFilter = selected ? label : 'All';
+          });
+        },
+        backgroundColor: Colors.black,
+        selectedColor: activeColor,
+        checkmarkColor: Colors.black,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: isSelected ? activeColor : Colors.white24)
+        ),
+      ),
+    );
   }
 
   @override
@@ -86,7 +117,7 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           // --- SLEEK SEARCH BAR ---
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(
               controller: _searchController,
               style: const TextStyle(color: Colors.white),
@@ -129,6 +160,23 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
 
+          // --- [NEW] STATUS FILTER CHIPS ---
+          SizedBox(
+            height: 50,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                _buildFilterChip('All', Colors.white),
+                _buildFilterChip('Premium', Colors.amber),
+                _buildFilterChip('Verified', Colors.blue),
+                _buildFilterChip('Free', Colors.grey),
+                _buildFilterChip('Banned', Colors.redAccent),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
           // --- ROSTER LIST ---
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
@@ -144,25 +192,42 @@ class _DashboardPageState extends State<DashboardPage> {
 
                 final allUsers = snapshot.data ?? [];
                 
-                // CLIENT-SIDE FILTERING LOGIC
-                final users = _searchQuery.isEmpty 
-                    ? allUsers 
-                    : allUsers.where((user) {
-                        final fullName = (user['full_name'] ?? '').toString().toLowerCase();
-                        final displayName = (user['display_name'] ?? '').toString().toLowerCase();
-                        final username = (user['username'] ?? '').toString().toLowerCase();
-                        final email = (user['email'] ?? '').toString().toLowerCase();
-                        
-                        return fullName.contains(_searchQuery) || 
-                               displayName.contains(_searchQuery) || 
-                               username.contains(_searchQuery) || 
-                               email.contains(_searchQuery);
-                      }).toList();
+                // --- COMBINED CLIENT-SIDE FILTERING LOGIC ---
+                final users = allUsers.where((user) {
+                  // 1. Text Search Filter
+                  bool matchesText = true;
+                  if (_searchQuery.isNotEmpty) {
+                    final fullName = (user['full_name'] ?? '').toString().toLowerCase();
+                    final displayName = (user['display_name'] ?? '').toString().toLowerCase();
+                    final username = (user['username'] ?? '').toString().toLowerCase();
+                    final email = (user['email'] ?? '').toString().toLowerCase();
+                    
+                    matchesText = fullName.contains(_searchQuery) || 
+                                  displayName.contains(_searchQuery) || 
+                                  username.contains(_searchQuery) || 
+                                  email.contains(_searchQuery);
+                  }
+
+                  // 2. Status Chip Filter
+                  bool matchesStatus = true;
+                  if (_currentFilter != 'All') {
+                    final isPremium = user['is_premium'] == true;
+                    final isVerified = user['is_verified'] == true;
+                    final isBanned = user['is_banned'] == true;
+
+                    if (_currentFilter == 'Premium') matchesStatus = isPremium;
+                    if (_currentFilter == 'Verified') matchesStatus = isVerified;
+                    if (_currentFilter == 'Free') matchesStatus = !isPremium && !isBanned;
+                    if (_currentFilter == 'Banned') matchesStatus = isBanned;
+                  }
+
+                  return matchesText && matchesStatus;
+                }).toList();
 
                 if (users.isEmpty) {
                   return Center(
                     child: Text(
-                      _searchQuery.isEmpty ? "No soldiers found yet." : "No users match your search.",
+                      _searchQuery.isEmpty && _currentFilter == 'All' ? "No soldiers found yet." : "No users match your filters.",
                       style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
                     ),
                   );
