@@ -1,21 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// --- NEW: RECENT EARNINGS PROVIDER ---
-final recentEarningsProvider = FutureProvider.family.autoDispose<List<Map<String, dynamic>>, String>((ref, userId) async {
-  final response = await Supabase.instance.client
-      .from('daily_creator_earnings')
-      .select('date, amount_earned')
-      .eq('user_id', userId)
-      .order('date', ascending: false)
-      .limit(2);
-      
-  return List<Map<String, dynamic>>.from(response);
-});
-
-class BankDetailScreen extends ConsumerStatefulWidget {
+class BankDetailScreen extends StatelessWidget {
   final String profileId; 
   final String authUserId; 
   final String userName;
@@ -28,51 +15,32 @@ class BankDetailScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<BankDetailScreen> createState() => _BankDetailScreenState();
-}
-
-class _BankDetailScreenState extends ConsumerState<BankDetailScreen> {
-  // --- DECLARE STREAMS IN STATE ---
-  late final Stream<List<Map<String, dynamic>>> walletStream;
-  late final Stream<List<Map<String, dynamic>>> bankStream;
-  late final Stream<List<Map<String, dynamic>>> historyStream;
-
-  @override
-  void initState() {
-    super.initState();
-    
-    // --- INITIALIZE ONCE TO PREVENT INFINITE REBUILD CRASH ---
+  Widget build(BuildContext context) {
     // Current Wallet
-    walletStream = Supabase.instance.client
+    final walletStream = Supabase.instance.client
         .from('profiles')
         .stream(primaryKey: ['id'])
-        .eq('id', widget.profileId)
+        .eq('id', profileId)
         .limit(1);
 
     // Bank Details
-    bankStream = Supabase.instance.client
+    final bankStream = Supabase.instance.client
         .from('creator_bank_accounts')
         .stream(primaryKey: ['id'])
-        .eq('user_id', widget.authUserId) 
+        .eq('user_id', authUserId) 
         .limit(1);
 
     // Historical Payouts
-    historyStream = Supabase.instance.client
+    final historyStream = Supabase.instance.client
         .from('payouts')
         .stream(primaryKey: ['id'])
-        .eq('user_id', widget.authUserId)
+        .eq('user_id', authUserId)
         .order('period', ascending: false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // --- FETCH NEW EARNINGS DATA ---
-    final recentEarningsAsync = ref.watch(recentEarningsProvider(widget.authUserId));
 
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("FINANCE: ${widget.userName}".toUpperCase()),
+        title: Text("FINANCE: $userName".toUpperCase()),
         backgroundColor: Colors.black,
         elevation: 0,
       ),
@@ -88,9 +56,6 @@ class _BankDetailScreenState extends ConsumerState<BankDetailScreen> {
             StreamBuilder<List<Map<String, dynamic>>>(
               stream: walletStream,
               builder: (context, snapshot) {
-                // Error Boundary
-                if (snapshot.hasError) return const Text('Error loading data', style: TextStyle(color: Colors.red));
-
                 final balance = (snapshot.hasData && snapshot.data!.isNotEmpty) 
                   ? snapshot.data!.first['earnings_balance'] ?? 0.0 
                   : 0.0;
@@ -115,63 +80,12 @@ class _BankDetailScreenState extends ConsumerState<BankDetailScreen> {
 
             const SizedBox(height: 40),
 
-            // --- RECENT DAILY EARNINGS (NEW INTEL CARD) ---
-            const Text("RECENT DAILY EARNINGS", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
-            const SizedBox(height: 12),
-            recentEarningsAsync.when(
-              loading: () => Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.blue.withOpacity(0.1)),
-                ),
-                child: const Center(child: CircularProgressIndicator(color: Colors.blue)),
-              ),
-              error: (err, stack) => Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.red.withOpacity(0.3)),
-                ),
-                child: const Text("Failed to load recent earnings.", style: TextStyle(color: Colors.red)),
-              ),
-              data: (items) {
-                final num yesterday = items.isNotEmpty ? (items[0]['amount_earned'] ?? 0) : 0;
-                final num previousDay = items.length > 1 ? (items[1]['amount_earned'] ?? 0) : 0;
-
-                return Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildBankRow("Yesterday's Earnings", "₦${_formatMoney(yesterday)}"),
-                      const Divider(color: Colors.white10),
-                      _buildBankRow("Previous Day's Earnings", "₦${_formatMoney(previousDay)}"),
-                    ],
-                  ),
-                );
-              },
-            ),
-
-            const SizedBox(height: 40),
-
             // --- BANK DETAILS ---
             const Text("BANK DESTINATION", style: TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1.5)),
             const SizedBox(height: 12),
             StreamBuilder<List<Map<String, dynamic>>>(
               stream: bankStream,
               builder: (context, snapshot) {
-                // Error Boundary
-                if (snapshot.hasError) return const Text('Error loading data', style: TextStyle(color: Colors.red));
-
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return Container(
                     padding: const EdgeInsets.all(16),
@@ -239,9 +153,6 @@ class _BankDetailScreenState extends ConsumerState<BankDetailScreen> {
             StreamBuilder<List<Map<String, dynamic>>>(
               stream: historyStream,
               builder: (context, snapshot) {
-                // Error Boundary
-                if (snapshot.hasError) return const Text('Error loading data', style: TextStyle(color: Colors.red));
-
                 if (!snapshot.hasData) return const LinearProgressIndicator(color: Colors.amber);
                 final payouts = snapshot.data!;
                 
